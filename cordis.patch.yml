@@ -1,0 +1,4 @@
+# 由 我的Cordis（packer2）合成：安装后作为 profile 层（bundle）插件激活
+- insert:
+    - id: dsh-mycordis
+      name: dsh-mycordis

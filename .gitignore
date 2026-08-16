@@ -1,0 +1,7 @@
+node_modules/
+*.tgz
+.DS_Store
+.packer2/
+packer2-favorites.json
+packer2-out/
+packer2-snapshot/

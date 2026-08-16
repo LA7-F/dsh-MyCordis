@@ -1,0 +1,19 @@
+{
+  "name": "dsh-mycordis",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "我的Cordis：DeepSeek Harness 会话级动态插件的打包 / 安装 / 便携化 / 管理工具（含「打包整包」：dsh 安装包 + 便携包 一键同出）",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "host.js",
+    "client.js",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
