@@ -1,6 +1,6 @@
 # 我的Cordis（MyCordis）
 
-会话级动态插件的「**打包 / 安装 / 便携化 / 管理 / 卸载**」工具 —— 一个运行在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）之内的动态 [Cordis](https://github.com/cordiverse/cordis) 插件（host 半区）。
+[English](README.en.md) | 中文
 
 我的Cordis 本身就是 dsh「**一切皆插件**」架构的一个实例：它作为会话级动态插件加载，将自身打包并安装自身实现验证，同时进行了其他demo插件测试
 
@@ -16,12 +16,12 @@ Cordis「**便携包**」目前可能只支持Windows端使用，后续会加配
 
 ## 特性
 
-- **打包整包**（pkg-4 新增）：一个插件同时产出 dsh 安装包（`.tgz`）与便携包（`.dshplugin.json`）到同一文件夹，每插件一个子文件夹，支持单个与批量一键打包
+- **打包整包**：一个插件同时产出 dsh 安装包（`.tgz`）与便携包（`.dshplugin.json`）到同一文件夹，每插件一个子文件夹，支持单个与批量一键打包
 - **dsh 包**（`.tgz`）：`pnpm pack` 合成的真实安装包，可用 `dsh plugin add` 安装，重启 dsh 生效
 - **便携包**（`.dshplugin.json`）：纯 host 定义文件，跨会话导入，或由新会话 AI 直接 `read` 后 `cordis_define` 重建（省 token）
 - 批量 / 单个打包，三种打包类型即时切换
 - 安装 / 卸载 dsh 插件（profile 级真实安装）
-- 导入便携包（仅注册不运行，附可信来源警示）
+- 导入便携包（仅注册不运行）
 - 收藏（☆）/ 常驻（★ 重启自动恢复）/ 恢复（启动）/ 复制跨会话定位信息
 - 同名插件去重（按名称合并版本）
 - 安全加固：请求信任栅栏、10MB 请求体上限（统一 413）等
@@ -50,14 +50,6 @@ pnpm dsh plugin --profile web add .            # 以当前目录作为本地依�
 pnpm dsh plugin --profile web add ../dsh-MyCordis        # 相对路径（dsh 会自动锚定到当前目录）
 pnpm dsh plugin --profile web add file:./dsh-MyCordis    # 拷贝安装
 pnpm dsh plugin --profile web add link:./dsh-MyCordis    # 链接安装（改源码即时生效，适合开发调试）
-```
-
-> 说明：本地目录安装与 git 安装都写入 `$DSH_HOME/profiles/<profile>`，重启 dsh 后生效；`link:` 以软链接引用源码目录，修改后无需重装。
-
-### 方式三：本地 dsh 安装包（.tgz）
-
-```sh
-dsh plugin --profile web add <插件名>-0.1.0.tgz
 ```
 
 ### 仓库结构（git 安装前提）
