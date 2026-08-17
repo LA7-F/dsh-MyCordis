@@ -24,6 +24,32 @@ function sendHtml(res, html) {
 }
 // 请求体上限：防止超大 body 耗尽内存（DoS）
 const MAX_BODY_BYTES = 10 * 1024 * 1024
+// ── 便携包导出脱敏：ownerSessionId 用假 ID 替代，防止泄露会话标识；导入时自动落到当前/任一已存在会话 ──
+const FAKE_SESSION_ID = 'session-00000000-0000-4000-8000-000000000000'
+function isFakeSessionId(id) {
+  const s = String(id || '')
+  return s === '' || s === FAKE_SESSION_ID || /^session-0{8}-0{4}-0{4}-0{4}-0{12}$/.test(s)
+}
+function sanitizePortable(data) {
+  if (data && typeof data === 'object') data.ownerSessionId = FAKE_SESSION_ID
+  return data
+}
+async function resolveCurrentSessionId(ctx) {
+  try {
+    const agents = ctx.get('agents')
+    if (agents !== undefined) {
+      if (typeof agents.currentInitiator === 'function') {
+        const i = agents.currentInitiator()
+        if (i && i.id) return String(i.id)
+      }
+      if (typeof agents.roots === 'function') {
+        const roots = agents.roots()
+        if (roots && roots.length === 1) return String(roots[0].id || '')
+      }
+    }
+  } catch (e) { /* 保持空 */ }
+  return ''
+}
 function readBody(req) {
   return new Promise((resolvePromise, reject) => {
     const chunks = []
@@ -852,7 +878,7 @@ async function exportBatch(ctx, payload) {
   const results = []
   for (const p of plugins) {
     try {
-      const data = exportDynamicPlugin(ctx, p.pluginId, p.packageId, true)
+      const data = sanitizePortable(exportDynamicPlugin(ctx, p.pluginId, p.packageId, true))
       const artifact = outDir.replace(/[\\/]+$/, '') + '/' + data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const target = await fs.resolve(artifact)
       await fs.writeText(target, JSON.stringify(data, null, 2), undefined, undefined, policy)
@@ -902,7 +928,7 @@ async function packWhole(ctx, payload) {
       const subDir = outDir.replace(/[\\/]+$/, '') + '/' + pluginId + (packageId === '' ? '' : '-' + packageId)
       await runShell(ctx, 'New-Item -ItemType Directory -Force -Path ' + sq(subDir), undefined, policy)
       const tgz = await packSessionPlugin(ctx, { pluginId: pluginId, packageId: packageId, outDir: subDir })
-      const data = exportDynamicPlugin(ctx, pluginId, packageId, true)
+      const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId, true))
       const portableName = data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const artifact = subDir.replace(/[\\/]+$/, '') + '/' + portableName
       const target = await fs.resolve(artifact)
@@ -934,7 +960,15 @@ async function importDynamicPlugin(ctx, payload, runIt) {
   if (data && data.__dshDynamicPlugins === true && Array.isArray(data.plugins)) items = data.plugins
   else if (data && data.__dshDynamicPlugin === true) items = [data]
   else throw new Error('不是便携动态插件包')
-  const sessionId = String((payload && payload.sessionId) || (items.length ? items[0].ownerSessionId : '') || '')
+  let sessionId = String((payload && payload.sessionId) || (items.length ? items[0].ownerSessionId : '') || '')
+  if (isFakeSessionId(sessionId)) sessionId = await resolveCurrentSessionId(ctx)
+  if (sessionId === '') {
+    // 兜底：取当前进程任一已存在会话（与自动恢复一致）
+    try {
+      const rows = runner.inventory() || []
+      for (const r of rows) { if (r && r.agentId) { sessionId = String(r.agentId); break } }
+    } catch (e) { /* 保持空 */ }
+  }
   if (sessionId === '') throw new Error('导入需要所属会话 id（sessionId）')
   const results = []
   for (const item of items) {
@@ -1232,7 +1266,7 @@ async function autoRestoreResident(ctx) {
   try { await importDynamicPlugin(ctx, { data: { __dshDynamicPlugins: true, plugins: todo }, sessionId: sessionId }, true) } catch (e) { /* 静默 */ }
 }
 async function snapshotPlugin(ctx, pluginId) {
-  const data = exportDynamicPlugin(ctx, pluginId, '')
+  const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, ''))
   const ws = await workspaceRoot(ctx)
   if (!ws) throw new Error('无法确定工作区根目录')
   const dir = ws.replace(/[\\/]+$/, '') + '/packer2-snapshot'
@@ -1273,7 +1307,7 @@ async function handleRequest(ctx, req, res) {
       const p = u.query
       const qs = {}
       p.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
-      try { const data = exportDynamicPlugin(ctx, qs.pluginId, qs.packageId); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { const data = sanitizePortable(exportDynamicPlugin(ctx, qs.pluginId, qs.packageId)); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/export-batch' && req.method === 'POST') {
