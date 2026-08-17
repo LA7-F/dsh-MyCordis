@@ -45,7 +45,7 @@ async function resolveCurrentSessionId(ctx) {
       }
       if (typeof agents.roots === 'function') {
         const roots = agents.roots()
-        if (roots && roots.length === 1) return String(roots[0].id || '')
+        if (roots && roots.length > 0) return String(roots[0].id || '')
       }
     }
   } catch (e) { /* 保持空 */ }
@@ -1057,11 +1057,18 @@ async function importDynamicPlugin(ctx, payload, runIt) {
     } catch (e) { /* 保持空 */ }
   }
   if (sessionId === '') {
-    // 隐私要求：导出文件不保留真实会话 id。解析不到任何会话时（全新机器/空进程），
-    // 直接用文件里的归属键（脱敏假 ID）作为 sessionId——define/run 只把它当归属键字符串，
-    // 不要求会话真实存在，插件照常定义并运行（webServer 全局、packer2 列表全局可见）。
-    sessionId = String((items.length && items[0].ownerSessionId) || FAKE_SESSION_ID)
+    // 隐私要求：导出文件不保留真实会话 id。解析不到当前/已有会话时（全新机器/空进程），
+    // 必须回落到一个【真实存在的会话】——runner 运行时要求会话真实存在（假 ID 会报 session-not-found）。
+    // dsh 必然有 root agent，取 roots[0]；真没有任何会话才报错。
+    try {
+      const agents = ctx.get('agents')
+      if (agents !== undefined && typeof agents.roots === 'function') {
+        const roots = agents.roots()
+        if (roots && roots.length > 0) sessionId = String(roots[0].id || '')
+      }
+    } catch (e) { /* 保持空 */ }
   }
+  if (sessionId === '' || isFakeSessionId(sessionId)) throw new Error('导入需要所属会话 id（无法解析任何真实会话）')
   const results = []
   for (const item of items) {
     if (!item || item.__dshDynamicPlugin !== true) continue
@@ -1356,11 +1363,12 @@ async function autoRestoreResident(ctx) {
     const agents = ctx.get('agents')
     if (agents) {
       if (typeof agents.currentInitiator === 'function') { const i = agents.currentInitiator(); if (i && i.id) currentSid = String(i.id) }
-      if (currentSid === '' && typeof agents.roots === 'function') { const roots = agents.roots(); if (roots && roots.length === 1) currentSid = String(roots[0].id || '') }
+      if (currentSid === '' && typeof agents.roots === 'function') { const roots = agents.roots(); if (roots && roots.length > 0) currentSid = String(roots[0].id || '') }
     }
   } catch (e) { /* 保持空 */ }
-  const sessionId = currentSid || String((todo[0] && todo[0].ownerSessionId) || '') || sid
-  if (sessionId === '') return
+  // 会话必须真实存在：假 ID（脱敏归属键）不能作为运行目标，取当前会话 / 任一已存在会话 / 首个 root
+  const sessionId = currentSid || sid || ''
+  if (sessionId === '' || isFakeSessionId(sessionId)) return
   try { await importDynamicPlugin(ctx, { data: { __dshDynamicPlugins: true, plugins: todo }, sessionId: sessionId }, true) } catch (e) { /* 静默 */ }
 }
 async function snapshotPlugin(ctx, pluginId) {
