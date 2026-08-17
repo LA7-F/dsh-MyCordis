@@ -149,6 +149,36 @@ function normPath(p) {
 function sanitizeFilename(name) {
   return String(name || 'download').replace(/[\r\n]/g, '').replace(/[^\w.\-]/g, '_')
 }
+// ── 操作者令牌：可选防护；设置后危险端点必须携带 X-Auth-Token（opt-in，未设置则维持现状）──
+async function tokenPath(ctx) {
+  const ws = await workspaceRoot(ctx)
+  return ws.replace(/[\\/]+$/, '') + '/packer2-token.txt'
+}
+async function readToken(ctx) {
+  const fs = ctx.get('fs')
+  if (fs === undefined) return ''
+  try {
+    const t = await fs.resolve(await tokenPath(ctx))
+    return String(await fs.readText(t) || '').trim()
+  } catch (e) { return '' }
+}
+async function tokenEnabled(ctx) {
+  return (await readToken(ctx)) !== ''
+}
+async function tokenOk(ctx, req) {
+  if (!(await tokenEnabled(ctx))) return true
+  const h = (req && req.headers) || {}
+  const got = String(h['x-auth-token'] || '')
+  const want = await readToken(ctx)
+  return got !== '' && got === want
+}
+// ── 错误信息脱敏：剥掉绝对路径与超长命令片段 ──
+function safeErrorMsg(e) {
+  let m = String(e && e.message ? e.message : e)
+  m = m.replace(/[A-Za-z]:[\\/][^\s'";\n]*/g, '<路径>')
+  m = m.split('\n').map(function (l) { return l.length > 160 ? l.slice(0, 160) + '…' : l }).join('\n')
+  return m
+}
 function parsePath(reqUrl) {
   const raw = String(reqUrl || '/')
   const q = raw.indexOf('?')
@@ -332,6 +362,8 @@ ${head}
   <div class="row"><input id="xsess" type="text" placeholder="所属会话 id（可空）"><input id="xfile" type="file" accept=".json" style="display:none"><button id="xbtn" class="btn">导入便携包</button></div>
 </div>
 <div id="viewMgmt" style="display:none">
+  <div class="row"><input id="tauth" type="password" placeholder="操作者令牌（≥8 字符，保护危险操作）" spellcheck="false"><button id="tsave" class="btn">保存令牌</button><button id="tclear" class="btn">清除本机缓存</button></div>
+  <span id="tauthHint" class="hint"></span>
   <div class="section">① 已安装 dsh 插件（常驻，重启生效）</div>
   <div class="desc">列出 profile 已安装插件；卸载需批准提升权限，重启 dsh 生效</div>
   <div class="row"><input id="mprofile" type="text" value="web" placeholder="profile（默认 web）"><button id="mrefresh" class="btn">刷新</button></div>
@@ -377,7 +409,7 @@ ${head}
     $('log').textContent = ''
     if (type === 'whole') {
       log('step', '▸ 打包整包 ' + pluginId + '/' + packageId + '（dsh 安装包 + 便携包，一插件一子文件夹）…')
-      fetch(API + '/pack-whole', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
+      fetch(API + '/pack-whole', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
           ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir + ' （' + r.tgzName + ' + ' + r.portableName + '）'); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
@@ -385,14 +417,14 @@ ${head}
     }
     if (type === 'portable') {
       log('step', '▸ 导出 ' + pluginId + ' 便携包（纯 host）…')
-      fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
+      fetch(API + '/export-batch', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
           ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
     log('step', '▸ 打包 ' + pluginId + '/' + packageId + ' …')
-    fetch(API + '/pack', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pluginId: pluginId, packageId: packageId, outDir: outDir }) })
+    fetch(API + '/pack', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ pluginId: pluginId, packageId: packageId, outDir: outDir }) })
       .then(function (r) { return r.json() }).then(function (d) {
         if (d.ok) log('ok', '✔ ' + d.pluginId + '/' + d.packageId + ' → ' + d.artifactPath)
         else log('err', '✘ ' + (d.message || JSON.stringify(d)))
@@ -406,7 +438,7 @@ ${head}
     var outDir = $('outDir').value.trim()
     if (type === 'whole') {
       log('step', '▸ 一键打包整包 ' + checked.length + ' 个插件（dsh 安装包 + 便携包，每插件一个子文件夹）…')
-      fetch(API + '/pack-whole', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
+      fetch(API + '/pack-whole', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ plugins: checked, outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
           ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
@@ -414,24 +446,43 @@ ${head}
     }
     if (type === 'portable') {
       log('step', '▸ 导出 ' + checked.length + ' 个便携包（纯 host）到放置目录…')
-      fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
+      fetch(API + '/export-batch', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ plugins: checked, outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
           ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
     log('step', '▸ 一键打包 ' + checked.length + ' 个插件…')
-    fetch(API + '/pack-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
+    fetch(API + '/pack-batch', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ plugins: checked, outDir: outDir }) })
       .then(function (r) { return r.json() }).then(function (d) {
         ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.artifactPath); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
       }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
   }
   $('batch').onclick = doBatch
+  function authHeaders() {
+    var t = ''
+    try { t = localStorage.getItem('packer2-token') || '' } catch (e) { t = '' }
+    return t ? { 'X-Auth-Token': t } : {}
+  }
+  $('tsave').onclick = function () {
+    var token = $('tauth').value.trim()
+    if (token.length < 8) { log('err', '✘ 令牌至少 8 个字符'); return }
+    fetch(API + '/token', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ token: token }) })
+      .then(function (r) { return r.json() }).then(function (d) {
+        if (d.ok) { try { localStorage.setItem('packer2-token', token) } catch (e) {} log('ok', '✔ 令牌已设置并缓存；危险操作现需携带令牌'); refreshAuthHint(true) }
+        else log('err', '✘ ' + (d.message || JSON.stringify(d)))
+      }).catch(function (e) { log('err', '✘ ' + e.message) })
+  }
+  $('tclear').onclick = function () { try { localStorage.removeItem('packer2-token') } catch (e) {} log('ok', '已清除本机令牌缓存') }
+  function refreshAuthHint(enabled) {
+    if (enabled === true) $('tauthHint').textContent = '令牌已启用：导入/恢复/安装/卸载/去重/收藏等危险操作需携带 X-Auth-Token'
+    else $('tauthHint').textContent = '⚠ 未设置操作者令牌：危险操作当前无额外保护（可在上方设置）'
+  }
   function fmtSize(n) { if (n === undefined || n === null) return ''; if (n < 1024) return n + ' B'; if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'; return (n / 1048576).toFixed(1) + ' MB' }
   function pickNative() {
     var rpcId = 'packer2-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
     var body = JSON.stringify({ type: 'client-request', rpcId: rpcId, method: 'host.pickDirectory', payload: {} })
-    return fetch('/api/host.pickDirectory', { method: 'POST', headers: { 'content-type': 'application/json' }, body: body })
+    return fetch('/api/host.pickDirectory', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: body })
       .then(function (r) { return r.json() })
       .then(function (resp) {
         var res = resp && resp.result
@@ -444,7 +495,7 @@ ${head}
       })
   }
   function pickClassicInto(inputId, start) {
-    fetch(API + '/browse/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ start: start || '' }) })
+    fetch(API + '/browse/pick', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ start: start || '' }) })
       .then(function (r2) { return r2.json() })
       .then(function (f) { if (f.picked) { $(inputId).value = f.picked; setCache(inputId, f.picked) } if (f.error) log('err', '⚠ ' + f.error) })
       .catch(function (e) { log('err', '✘ 浏览失败: ' + e.message) })
@@ -477,13 +528,13 @@ ${head}
       if (!b64) { log('err', '✘ 读取文件失败'); setInstalling(false); return }
       $('log').textContent = ''
       log('step', '▸ 上传 ' + f.name + '（' + fmtSize(f.size) + '）…')
-      fetch(API + '/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: f.name, base64: b64, size: f.size }) })
+      fetch(API + '/upload', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ name: f.name, base64: b64, size: f.size }) })
         .then(function (r) { return r.json() })
         .then(function (d) {
           if (!(d.ok && d.path)) { log('err', '✘ ' + (d.message || JSON.stringify(d))); setInstalling(false); return }
           log('ok', '✔ 已载入 → ' + d.path)
           log('step', '▸ 安装到 profile ' + profile + ' …（需批准提升权限）')
-          return fetch(API + '/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: d.path, profile: profile }) })
+          return fetch(API + '/install', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ path: d.path, profile: profile }) })
             .then(function (r2) { return r2.json() })
             .then(function (i) { log(i.ok ? 'ok' : 'err', (i.ok ? '✔ ' : '✘ ') + (i.ok ? i.note : (i.message || JSON.stringify(i)))); setInstalling(false) })
         })
@@ -494,6 +545,7 @@ ${head}
   }
   function load() {
     fetch(API + '/plugins').then(function (r) { return r.json() }).then(function (d) {
+      if (d.auth) refreshAuthHint(d.auth.enabled)
       if (!d.outDir && $('outDir').value === '') $('outDir').value = d.defaultOutDir || ''
       if (d.defaultOutDir) { if (!getCache('outDir')) setCache('outDir', d.defaultOutDir); if (!getCache('ipath')) setCache('ipath', d.defaultOutDir) }
       if (!d.available) { $('hint').textContent = d.reason || '不可用'; $('list').textContent = ''; return }
@@ -543,7 +595,7 @@ ${head}
         var btn = document.createElement('button'); btn.className = 'btn'; btn.textContent = '卸载'; btn.disabled = dep.isBase
         btn.onclick = function () {
           log('step', '▸ 卸载 ' + dep.name + ' …（需批准提升权限）')
-          fetch(API + '/uninstall', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: dep.name, profile: profile }) })
+          fetch(API + '/uninstall', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ name: dep.name, profile: profile }) })
             .then(function (r) { return r.json() }).then(function (x) { log(x.ok ? 'ok' : 'err', (x.ok ? '✔ ' : '✘ ') + (x.ok ? x.note : (x.message || JSON.stringify(x)))); loadInstalled() })
             .catch(function (e) { log('err', '✘ ' + e.message) })
         }
@@ -623,18 +675,18 @@ ${head}
     }).catch(function (e) { log('err', '✘ ' + e.message) })
   }
   function setFav(pluginId, packageId, action) {
-    fetch(API + '/favorite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: action, pluginId: pluginId, packageId: packageId }) })
+    fetch(API + '/favorite', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ action: action, pluginId: pluginId, packageId: packageId }) })
       .then(function (r) { return r.json() }).then(function (x) { log(x.ok ? 'ok' : 'err', (x.ok ? '✔ ' : '✘ ') + (action === 'add' ? '已收藏 ' : '已取消收藏 ') + pluginId); loadCards() })
       .catch(function (e) { log('err', '✘ ' + e.message) })
   }
   function setResident(pluginId, packageId, on) {
-    fetch(API + '/favorite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'resident', pluginId: pluginId, packageId: packageId, resident: on }) })
+    fetch(API + '/favorite', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ action: 'resident', pluginId: pluginId, packageId: packageId, resident: on }) })
       .then(function (r) { return r.json() }).then(function (x) { log(x.ok ? 'ok' : 'err', (x.ok ? '✔ ' : '✘ ') + (on ? '已设常驻（收藏 + 自动运行）' : '已取消常驻') + ' ' + pluginId); loadCards() })
       .catch(function (e) { log('err', '✘ ' + e.message) })
   }
   function restoreOne(pluginId) {
     log('step', '▸ 恢复（启动）' + pluginId + ' …')
-    fetch(API + '/restore-one', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pluginId: pluginId }) })
+    fetch(API + '/restore-one', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ pluginId: pluginId }) })
       .then(function (r) { return r.json() }).then(function (d) {
         if (d.ok && d.results && d.results.length) { d.results.forEach(function (r) { log('ok', '✔ 已恢复并启动 ' + r.pluginId + '/' + r.packageId + '（' + r.name + '）') }); load(); loadCards() }
         else log('err', '✘ ' + (d.message || d.note || JSON.stringify(d)))
@@ -663,7 +715,7 @@ ${head}
     }
   }
   function copyInfo(pluginId) {
-    fetch(API + '/snapshot', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pluginId: pluginId }) })
+    fetch(API + '/snapshot', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: JSON.stringify({ pluginId: pluginId }) })
       .then(function (r) { return r.json() })
       .then(function (d) {
         if (!d.ok) { log('err', '✘ ' + (d.message || '导出快照失败')); return }
@@ -682,7 +734,7 @@ ${head}
   $('mrefresh').onclick = function () { loadInstalled() }
   $('frestore').onclick = function () {
     log('step', '▸ 恢复收藏（启动）…')
-    fetch(API + '/restore-favorites', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    fetch(API + '/restore-favorites', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: '{}' })
       .then(function (r) { return r.json() }).then(function (d) {
         if (d.ok && d.results) { d.results.forEach(function (r) { log('ok', '✔ 已恢复并启动 ' + r.pluginId + '/' + r.packageId + '（' + r.name + '）') }); load(); loadCards() }
         else log('err', '✘ ' + (d.message || d.note || JSON.stringify(d)))
@@ -690,7 +742,7 @@ ${head}
   }
   $('dedupe').onclick = function () {
     log('step', '▸ 去重（同名插件只留一个 + 收藏按名称去重）…')
-    fetch(API + '/dedupe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    fetch(API + '/dedupe', { method: 'POST', headers: Object.assign({ 'content-type': 'application/json' }, authHeaders()), body: '{}' })
       .then(function (r) { return r.json() }).then(function (d) {
         if (d.ok) { log('ok', '✔ 已清理 ' + ((d.removed || []).length) + ' 个重复插件实例，收藏剩 ' + d.favorites + ' 条'); load(); loadCards() }
         else log('err', '✘ ' + (d.message || JSON.stringify(d)))
@@ -930,7 +982,7 @@ async function exportBatch(ctx, payload) {
       await fs.writeText(target, JSON.stringify(data, null, 2), undefined, undefined, policy)
       results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: true, path: artifact })
     } catch (e) {
-      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: false, message: String(e && e.message ? e.message : e) })
+      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: false, message: safeErrorMsg(e) })
     }
   }
   return { ok: true, results }
@@ -945,7 +997,7 @@ async function packBatch(ctx, payload) {
       const r = await packSessionPlugin(ctx, { pluginId: p.pluginId, packageId: p.packageId, outDir: outDirRaw })
       results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: true, artifactPath: r.artifactPath, sha256: r.sha256, sizeBytes: r.sizeBytes, notes: r.notes })
     } catch (e) {
-      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: false, message: String(e && e.message ? e.message : e) })
+      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: false, message: safeErrorMsg(e) })
     }
   }
   return { ok: true, results }
@@ -993,7 +1045,7 @@ async function packWhole(ctx, payload) {
         notes: tgz.notes,
       })
     } catch (e) {
-      results.push({ pluginId: String(p.pluginId || ''), packageId: String(p.packageId || ''), ok: false, message: String(e && e.message ? e.message : e) })
+      results.push({ pluginId: String(p.pluginId || ''), packageId: String(p.packageId || ''), ok: false, message: safeErrorMsg(e) })
     }
   }
   return { ok: true, outDir, results }
@@ -1342,15 +1394,30 @@ async function handleRequest(ctx, req, res) {
       sendHtml(res, pageHtml(embed))
       return
     }
+    if (path === '/api/token' && req.method === 'POST') {
+      let body
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      if (await tokenEnabled(ctx)) { send(res, 403, { ok: false, message: '令牌已设置；如需修改请直接编辑工作区 packer2-token.txt' }); return }
+      const token = String((body && body.token) || '').trim()
+      if (token.length < 8) { send(res, 400, { ok: false, message: '令牌至少 8 个字符' }); return }
+      const fs = ctx.get('fs')
+      if (fs === undefined) { send(res, 200, { ok: false, message: 'fs 服务不可用' }); return }
+      try {
+        const t = await fs.resolve(await tokenPath(ctx))
+        await fs.writeText(t, token)
+        send(res, 200, { ok: true, message: '令牌已设置，危险操作现在需要 X-Auth-Token 头' })
+      } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
+      return
+    }
     if (path === '/api/plugins' && req.method === 'GET') {
       const d = listPlugins(ctx)
-      send(res, 200, { ...d, defaultOutDir: (await workspaceRoot(ctx)) + '/packer2-out' })
+      send(res, 200, { ...d, defaultOutDir: (await workspaceRoot(ctx)) + '/packer2-out', auth: { enabled: await tokenEnabled(ctx) } })
       return
     }
     if (path === '/api/snapshot' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await snapshotPlugin(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await snapshotPlugin(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/export' && req.method === 'GET') {
@@ -1359,43 +1426,45 @@ async function handleRequest(ctx, req, res) {
       try {
         p.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
       } catch (e) { send(res, 400, { ok: false, message: '查询参数不是合法编码' }); return }
-      try { const data = sanitizePortable(exportDynamicPlugin(ctx, qs.pluginId, qs.packageId)); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { const data = sanitizePortable(exportDynamicPlugin(ctx, qs.pluginId, qs.packageId)); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/export-batch' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await exportBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await exportBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/pack-batch' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await packBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await packBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/pack-whole' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await packWhole(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await packWhole(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/import' && req.method === 'POST') {
+      if (!(await tokenOk(ctx, req))) { send(res, 403, { ok: false, needToken: true, message: '需要操作者令牌（X-Auth-Token）' }); return }
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await importDynamicPlugin(ctx, body, false)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await importDynamicPlugin(ctx, body, false)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/install' && req.method === 'POST') {
+      if (!(await tokenOk(ctx, req))) { send(res, 403, { ok: false, needToken: true, message: '需要操作者令牌（X-Auth-Token）' }); return }
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await installBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await installBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/upload' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await uploadBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await uploadBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/installed' && req.method === 'GET') {
@@ -1408,37 +1477,42 @@ async function handleRequest(ctx, req, res) {
       return
     }
     if (path === '/api/uninstall' && req.method === 'POST') {
+      if (!(await tokenOk(ctx, req))) { send(res, 403, { ok: false, needToken: true, message: '需要操作者令牌（X-Auth-Token）' }); return }
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await uninstallBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await uninstallBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/dedupe' && req.method === 'POST') {
-      try { send(res, 200, await dedupePlugins(ctx)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      if (!(await tokenOk(ctx, req))) { send(res, 403, { ok: false, needToken: true, message: '需要操作者令牌（X-Auth-Token）' }); return }
+      try { send(res, 200, await dedupePlugins(ctx)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/favorites' && req.method === 'GET') {
-      try { send(res, 200, { ok: true, favorites: (await readFavorites(ctx)).favorites.map(function (f) { return { pluginId: f.pluginId, packageId: f.packageId, name: f.name, resident: f.resident === true } }) }) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, { ok: true, favorites: (await readFavorites(ctx)).favorites.map(function (f) { return { pluginId: f.pluginId, packageId: f.packageId, name: f.name, resident: f.resident === true } }) }) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/favorite' && req.method === 'POST') {
+      if (!(await tokenOk(ctx, req))) { send(res, 403, { ok: false, needToken: true, message: '需要操作者令牌（X-Auth-Token）' }); return }
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try {
         if (body && body.action === 'remove') send(res, 200, await favoriteRemove(ctx, String(body.pluginId || '')))
         else if (body && body.action === 'resident') send(res, 200, await favoriteSetResident(ctx, String(body.pluginId || ''), String(body.packageId || ''), body.resident === true))
         else send(res, 200, await favoriteAdd(ctx, String(body.pluginId || ''), String(body.packageId || '')))
-      } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/restore-one' && req.method === 'POST') {
+      if (!(await tokenOk(ctx, req))) { send(res, 403, { ok: false, needToken: true, message: '需要操作者令牌（X-Auth-Token）' }); return }
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await restoreOne(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await restoreOne(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/restore-favorites' && req.method === 'POST') {
-      try { send(res, 200, await restoreFavorites(ctx)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      if (!(await tokenOk(ctx, req))) { send(res, 403, { ok: false, needToken: true, message: '需要操作者令牌（X-Auth-Token）' }); return }
+      try { send(res, 200, await restoreFavorites(ctx)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/browse' && req.method === 'GET') {
@@ -1449,7 +1523,13 @@ async function handleRequest(ctx, req, res) {
       if (cap.kind === 'browse') {
         let target
         try { target = u.query.startsWith('path=') ? decodeURIComponent(u.query.slice(5)) : undefined } catch (e) { target = undefined }
-        try { const listing = await cap.list(target === '' ? undefined : target); send(res, 200, { kind: 'browse', ...listing }); return } catch (e) { send(res, 200, { kind: 'browse', error: String(e && e.message ? e.message : e) }); return }
+        if (target !== undefined && target !== '') {
+          const ws = (await workspaceRoot(ctx)) || ''
+          const tNorm = normPath(String(target)).toLowerCase()
+          const wNorm = normPath(ws).toLowerCase()
+          if (tNorm !== wNorm && !tNorm.startsWith(wNorm + '/')) { send(res, 200, { kind: 'browse', error: '路径超出工作区范围' }); return }
+        }
+        try { const listing = await cap.list(target === '' ? undefined : target); send(res, 200, { kind: 'browse', ...listing }); return } catch (e) { send(res, 200, { kind: 'browse', error: safeErrorMsg(e) }); return }
       }
       send(res, 200, { kind: 'none', reason: '未知 directoryPicker 后端: ' + cap.kind })
       return
@@ -1475,19 +1555,26 @@ async function handleRequest(ctx, req, res) {
       if (svc === undefined || typeof svc.capability !== 'function') { send(res, 200, { ok: false, message: 'directoryPicker 服务不可用' }); return }
       const cap = svc.capability()
       if (cap.kind !== 'browse') { send(res, 200, { ok: false, message: '当前后端不支持新建目录' }); return }
-      try { const created = await cap.createDirectory(String((body && body.path) || ''), String((body && body.name) || '')); send(res, 200, { ok: true, created }); return } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }); return }
+      try {
+        const base = String((body && body.path) || '')
+        const ws = (await workspaceRoot(ctx)) || ''
+        const bNorm = normPath(base).toLowerCase()
+        const wNorm = normPath(ws).toLowerCase()
+        if (bNorm !== wNorm && !bNorm.startsWith(wNorm + '/')) { send(res, 200, { ok: false, message: '路径超出工作区范围' }); return }
+        const created = await cap.createDirectory(base, String((body && body.name) || '')); send(res, 200, { ok: true, created }); return
+      } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }); return }
     }
     if (path === '/api/pack' && req.method === 'POST') {
       let payload
       try { payload = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await packSessionPlugin(ctx, payload || {})) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await packSessionPlugin(ctx, payload || {})) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     send(res, 404, { message: 'not found: ' + path })
   } catch (error) {
     const msg = String(error && error.message ? error.message : error)
     const status = msg === 'body-too-large' ? 413 : 500
-    try { send(res, status, { ok: false, message: msg === 'body-too-large' ? '请求体过大' : msg }) } catch (e) { res.destroy() }
+    try { send(res, status, { ok: false, message: msg === 'body-too-large' ? '请求体过大' : safeErrorMsg(msg) }) } catch (e) { res.destroy() }
   }
 }
 return {
