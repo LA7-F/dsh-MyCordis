@@ -404,7 +404,7 @@ ${head}
       log('step', '▸ 打包整包 ' + pluginId + '/' + packageId + '（dsh 安装包 + 便携包，一插件一子文件夹）…')
       fetch(API + '/pack-whole', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir + ' （' + r.tgzName + ' + ' + r.portableName + '）'); if (r.ok && r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) { log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir + ' （' + r.tgzName + ' + ' + r.portableName + '）'); if (r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')) } else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
@@ -412,7 +412,7 @@ ${head}
       log('step', '▸ 导出 ' + pluginId + ' 便携包…')
       fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); if (r.ok && r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) { log('ok', '✔ ' + r.pluginId + ' → ' + r.path); if (r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')) } else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
@@ -433,7 +433,7 @@ ${head}
       log('step', '▸ 一键打包整包 ' + checked.length + ' 个插件（dsh 安装包 + 便携包，每插件一个子文件夹）…')
       fetch(API + '/pack-whole', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir); if (r.ok && r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) { log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir); if (r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')) } else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
@@ -441,7 +441,7 @@ ${head}
       log('step', '▸ 导出 ' + checked.length + ' 个便携包到放置目录…')
       fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); if (r.ok && r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) { log('ok', '✔ ' + r.pluginId + ' → ' + r.path); if (r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')) } else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
