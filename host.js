@@ -1030,6 +1030,8 @@ async function importDynamicPlugin(ctx, payload, runIt) {
     if (item.code && typeof item.code.host === 'string') code.host = item.code.host
     if (item.code && typeof item.code.client === 'string') code.client = item.code.client
     if (code.host === undefined && code.client === undefined) continue
+    // 自动激活只对纯 host 插件；带 client UI 的导入后仅注册不运行，避免其 UI 吞掉主界面（用户可手动启动）
+    const willRun = runIt !== false && !(code.client !== undefined && String(code.client).trim() !== '')
     let targetPluginId = null
     let targetSessionId = ''
     let targetCurrentId = ''
@@ -1054,7 +1056,7 @@ async function importDynamicPlugin(ctx, payload, runIt) {
           const curHost = (inspected && inspected.code && inspected.code.host) || ''
           const newHost = (item.code && item.code.host) || ''
           if (curHost === newHost) {
-            if (runIt !== false) {
+            if (willRun) {
               try { await runner.run({ id: useSessionId }, targetPluginId, targetCurrentId, 'run', undefined) } catch (e) { /* 运行可选 */ }
             }
             results.push({ pluginId: targetPluginId, packageId: targetCurrentId, name })
@@ -1063,7 +1065,7 @@ async function importDynamicPlugin(ctx, payload, runIt) {
         } catch (e) { /* 比较失败，走追加新版本 */ }
       }
       receipt = runner.define({ sessionId: useSessionId, plugin: { kind: 'existing', pluginId: targetPluginId }, name, purpose, code })
-      if (runIt !== false) {
+      if (willRun) {
         try {
           const mode = targetCurrentId !== '' ? 'update' : 'run'
           await runner.run({ id: useSessionId }, receipt.pluginId, receipt.packageId, mode, undefined)
@@ -1071,7 +1073,7 @@ async function importDynamicPlugin(ctx, payload, runIt) {
       }
     } else {
       receipt = runner.define({ sessionId: useSessionId, plugin: { kind: 'new', idPrefix: prefix }, name, purpose, code })
-      if (runIt !== false) {
+      if (willRun) {
         try { await runner.run({ id: useSessionId }, receipt.pluginId, receipt.packageId, 'run', undefined) } catch (e) { /* 运行可选 */ }
       }
     }
