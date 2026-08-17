@@ -1015,7 +1015,12 @@ async function importDynamicPlugin(ctx, payload, runIt) {
       for (const r of rows) { if (r && r.agentId) { sessionId = String(r.agentId); break } }
     } catch (e) { /* 保持空 */ }
   }
-  if (sessionId === '') throw new Error('导入需要所属会话 id（sessionId）')
+  if (sessionId === '') {
+    // 隐私要求：导出文件不保留真实会话 id。解析不到任何会话时（全新机器/空进程），
+    // 直接用文件里的归属键（脱敏假 ID）作为 sessionId——define/run 只把它当归属键字符串，
+    // 不要求会话真实存在，插件照常定义并运行（webServer 全局、packer2 列表全局可见）。
+    sessionId = String((items.length && items[0].ownerSessionId) || FAKE_SESSION_ID)
+  }
   const results = []
   for (const item of items) {
     if (!item || item.__dshDynamicPlugin !== true) continue
