@@ -194,7 +194,7 @@ npm package layout: `package.json` (declares the `dsh.bundle.patch` composition 
 
 ## Open source
 
-When open-sourcing plugins packed with MyCordis, please add the `dsh-mycordis` topic.
+When open-sourcing plugins that are packaged with `dsh-MyCordis`, we encourage you to add the `dsh-mycordis` topic to your repository.
 
 ## References
 

@@ -10,7 +10,7 @@
 
 ## 预览版：
 
-Cordis「**便携包**」目前可能只支持Windows端使用，后续会加配置化、去 Windows 依赖以变更为通用型工具
+Cordis「**便携包**」目前可能只支持Windows端使用，后续考虑会去 Windows 依赖以变更为通用型工具
 
 ## 背景：
 
@@ -198,7 +198,7 @@ npm 包结构：`package.json`（含 `dsh.bundle.patch` 组合补丁声明）、
 
 ## 开源
 
-使用 我的Cordis 打包的插件，开源时请添加 `dsh-mycordis` 话题。
+使用 我的Cordis 打包的插件，开源时欢迎添加 `dsh-mycordis` 话题。
 
 ## 参考
 
