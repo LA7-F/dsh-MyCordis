@@ -30,7 +30,7 @@ Under dsh's "everything is a plugin" architecture, generation mode makes plugin 
 
 ## Running
 
-Repository: <https://github.com/LA7-F/dsh-MyCordis>
+Repository: GitHub <https://github.com/LA7-F/dsh-MyCordis> ｜ Gitee mirror <https://gitee.com/LA7_F/dsh-MyCordis>
 
 Assume the dsh root directory is **A**: `E:\harness\deepseek-harness`
 
@@ -41,10 +41,11 @@ pnpm dsh plugin --profile web add dsh-mycordis        # one-line install from th
 pnpm dsh --profile web                                # restart dsh
 ```
 
-Or install from git (source distribution; pin a branch/tag):
+Or install from git (source distribution; pin a branch/tag; the Gitee mirror is recommended in China — no proxy needed):
 
 ```sh
-pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git # recommended: run from root A
+pnpm dsh plugin --profile web add git+https://gitee.com/LA7_F/dsh-MyCordis.git   # Gitee mirror (China)
+pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git  # GitHub (international)
 pnpm dsh --profile web                                # restart dsh
 ```
 
@@ -53,7 +54,8 @@ pnpm dsh --profile web                                # restart dsh
 The plugin is cloned into folder **B**: `E:\harness\dsh-MyCordis`
 
 ```sh
-git clone https://github.com/LA7-F/dsh-MyCordis.git         # run where you want folder B to live
+git clone https://gitee.com/LA7_F/dsh-MyCordis.git          # Gitee mirror (China, no proxy)
+# or git clone https://github.com/LA7-F/dsh-MyCordis.git    # GitHub (international)
 pnpm dsh plugin --profile web add E:\harness\dsh-MyCordis   # recommended: run from dsh root A
 pnpm dsh --profile web                                      # restart dsh
 ```

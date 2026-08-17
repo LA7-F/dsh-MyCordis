@@ -30,7 +30,7 @@ Cordis「**便携包**」目前可能只支持Windows端使用，后续会加配
 
 ## 运行
 
-仓库：<https://github.com/LA7-F/dsh-MyCordis>
+仓库：GitHub <https://github.com/LA7-F/dsh-MyCordis> ｜ Gitee 镜像 <https://gitee.com/LA7_F/dsh-MyCordis>
 
 假设dsh根目录为A：E:\harness\deepseek-harness
 
@@ -41,10 +41,11 @@ pnpm dsh plugin --profile web add dsh-mycordis        # 从 npm 注册表安装�
 pnpm dsh --profile web								  #重启 dsh
 ```
 
-或从 git 安装（源码分发，可指定分支/tag）：
+或从 git 安装（源码分发，可指定分支/tag；国内建议用 Gitee 镜像，免代理）：
 
 ```sh
-pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git #建议在根目录A下执行
+pnpm dsh plugin --profile web add git+https://gitee.com/LA7_F/dsh-MyCordis.git   # Gitee 镜像（国内）
+pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git  # GitHub（国际）
 pnpm dsh --profile web								  #重启 dsh
 ```
 
@@ -53,7 +54,8 @@ pnpm dsh --profile web								  #重启 dsh
 插件被拉取到文件夹B：E:\harness\dsh-MyCordis
 
 ```sh
-git clone https://github.com/LA7-F/dsh-MyCordis.git         #在你想拉取到的B文件夹执行
+git clone https://gitee.com/LA7_F/dsh-MyCordis.git          # Gitee 镜像（国内，免代理）
+# 或 git clone https://github.com/LA7-F/dsh-MyCordis.git    # GitHub（国际）
 pnpm dsh plugin --profile web add E:\harness\dsh-MyCordis   #建议在dsh项目根目录A中执行
 pnpm dsh --profile web								        #重启 dsh
 ```
