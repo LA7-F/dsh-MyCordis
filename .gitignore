@@ -5,3 +5,4 @@ node_modules/
 packer2-favorites.json
 packer2-out/
 packer2-snapshot/
+.npm-cache/
