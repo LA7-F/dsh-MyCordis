@@ -276,7 +276,19 @@ function injectButton(html) {
   }
   document.addEventListener('click', function (ev) { if (!panel) return; if (panel.contains(ev.target)) return; var b = document.getElementById(ID); if (b && b.contains(ev.target)) return; closePanel() })
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closePanel() })
-  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function () { setInterval(mount, 1000) }) } else { setInterval(mount, 1000) }
+  // 每次页面加载自动展开 Cordis 面板（sidebar 底部 Run 卡面板，按钮带稳定 data-cordis-badge 属性）
+  function autoOpenCordisPanel() {
+    var tries = 0
+    var timer = setInterval(function () {
+      tries += 1
+      var b = document.querySelector('[data-cordis-badge]')
+      if (b) {
+        clearInterval(timer)
+        if (b.getAttribute('aria-expanded') !== 'true') { try { b.click() } catch (e) {} }
+      } else if (tries > 8) { clearInterval(timer) }
+    }, 700)
+  }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function () { setInterval(mount, 1000); autoOpenCordisPanel() }) } else { setInterval(mount, 1000); autoOpenCordisPanel() }
 })()`
   return html.replace('</body>', '<script>' + script + '</script>\n</body>')
 }
