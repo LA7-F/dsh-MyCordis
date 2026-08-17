@@ -90,6 +90,7 @@ function parseAuthority(authority) {
   const j = rest.search(/[/?#]/)
   if (j !== -1) rest = rest.slice(0, j)
   if (rest.startsWith(':')) port = rest.slice(1)
+  else if (rest !== '') port = rest
   return { host, port }
 }
 function isLoopbackHostname(h) {
