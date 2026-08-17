@@ -18,6 +18,16 @@ jobs:
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org/
+      # 校验 tag 与 package.json 版本一致（如 v0.1.1 ↔ 0.1.1），防止发错版本
+      - name: Verify tag matches package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag v${TAG} does not match package.json version ${PKG}"
+            exit 1
+          fi
+          echo "Publishing v${TAG}"
       # 纯 JS 无构建步骤；如需构建可在 publish 前加 run: npm run build
       - run: npm publish
         env:
