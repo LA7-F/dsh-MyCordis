@@ -328,7 +328,7 @@ ${head}
   <div class="desc">选择 .tgz 文件，自动上传并安装（等价于 dsh plugin add），需批准提升权限</div>
   <div class="row"><input id="iprofile" type="text" value="web" placeholder="profile（默认 web）"><input id="ifile" type="file" accept=".tgz,.dshplugin,application/gzip" style="display:none"><button id="ibtn" class="btn">安装 dsh 包</button></div>
   <div class="section">② 安装 Cordis 插件（临时，非真实安装）</div>
-  <div class="desc">⚠ 导入会在 dsh 进程内执行包内代码，请只导入可信来源的便携包（.dshplugin.json，纯 host，一个插件一个文件）；导入后仅注册不运行，点「恢复」才启动。</div>
+  <div class="desc">⚠ 导入会在 dsh 进程内执行包内代码，请只导入可信来源的便携包（.dshplugin.json，纯 host，一个插件一个文件）；导入后自动激活运行，无需手动「恢复」。</div>
   <div class="row"><input id="xsess" type="text" placeholder="所属会话 id（可空）"><input id="xfile" type="file" accept=".json" style="display:none"><button id="xbtn" class="btn">导入便携包</button></div>
 </div>
 <div id="viewMgmt" style="display:none">
@@ -523,9 +523,9 @@ ${head}
     rd.onload = function () {
       var data; try { data = JSON.parse(rd.result) } catch (e) { log('err','✘ JSON 解析失败: '+e.message); return }
       if (!data || (data.__dshDynamicPlugin !== true && data.__dshDynamicPlugins !== true)) { log('err','✘ 不是便携动态插件包'); return }
-      $('log').textContent=''; log('step','▸ 导入并注册为 Cordis 插件（不运行）…')
-      fetch(API+'/import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId:$('xsess').value.trim()||'',data:data})}).then(function(r){return r.json()}).then(function(d){
-        if (d.ok && d.results) { d.results.forEach(function(r){log('ok','✔ 已注册（未运行）'+r.pluginId+'/'+r.packageId+'（'+r.name+'）')}); load() }
+      $('log').textContent=''; log('step','▸ 导入并自动激活为 Cordis 插件…')
+      fetch(API+'/import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId:$('xsess').value.trim()||'',data:data,run:true})}).then(function(r){return r.json()}).then(function(d){
+        if (d.ok && d.results) { d.results.forEach(function(r){log('ok','✔ 已导入并激活 '+r.pluginId+'/'+r.packageId+'（'+r.name+'）')}); load() }
         else log('err','✘ '+(d.message||JSON.stringify(d)))
       }).catch(function(e){log('err','✘ 请求失败: '+e.message)})
     }
@@ -1388,7 +1388,7 @@ async function handleRequest(ctx, req, res) {
     if (path === '/api/import' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await importDynamicPlugin(ctx, body, false)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await importDynamicPlugin(ctx, body, body === undefined || body.run !== false)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/install' && req.method === 'POST') {
