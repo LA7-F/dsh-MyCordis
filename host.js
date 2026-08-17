@@ -318,7 +318,7 @@ ${head}
   <label>放置目录（打包产物输出目录）</label>
   <div class="row"><input id="outDir" type="text" spellcheck="false"><button id="browse" class="btn">浏览…</button><button id="refresh" class="btn">刷新列表</button></div>
   <label>打包类型（勾选插件后一键打包，或点每行「打包」单打）</label>
-  <div class="row"><select id="ptype"><option value="dsh">dsh 包（.tgz，真实安装）</option><option value="portable">便携包（纯 host，无 client UI）</option><option value="whole">整包（dsh 安装包 + 便携包）</option></select><label style="margin:0;display:flex;align-items:center;gap:4px;height:32px;white-space:nowrap;flex-shrink:0"><input type="checkbox" id="all">全选</label><button id="batch" class="btn primary">一键打包</button></div>
+  <div class="row"><select id="ptype"><option value="dsh">dsh 包（.tgz，真实安装）</option><option value="portable">便携包（含 client UI）</option><option value="whole">整包（dsh 安装包 + 便携包）</option></select><label style="margin:0;display:flex;align-items:center;gap:4px;height:32px;white-space:nowrap;flex-shrink:0"><input type="checkbox" id="all">全选</label><button id="batch" class="btn primary">一键打包</button></div>
   <span id="hint" class="hint"></span>
   <div class="grid head"><span></span><span>插件名</span><span>插件ID</span><span>版本</span><span>操作</span></div>
   <ul id="list"></ul>
@@ -328,7 +328,7 @@ ${head}
   <div class="desc">选择 .tgz 文件，自动上传并安装（等价于 dsh plugin add），需批准提升权限</div>
   <div class="row"><input id="iprofile" type="text" value="web" placeholder="profile（默认 web）"><input id="ifile" type="file" accept=".tgz,.dshplugin,application/gzip" style="display:none"><button id="ibtn" class="btn">安装 dsh 包</button></div>
   <div class="section">② 安装 Cordis 插件（临时，非真实安装）</div>
-  <div class="desc">⚠ 导入会在 dsh 进程内执行包内代码，请只导入可信来源的便携包（.dshplugin.json，纯 host，一个插件一个文件）；导入后自动激活运行，无需手动「恢复」。</div>
+  <div class="desc">⚠ 导入会在 dsh 进程内执行包内代码，请只导入可信来源的便携包（.dshplugin.json，含 host 与 client UI）；导入后自动激活运行，无需手动「恢复」。</div>
   <div class="row"><input id="xsess" type="text" placeholder="所属会话 id（可空）"><input id="xfile" type="file" accept=".json" style="display:none"><button id="xbtn" class="btn">导入便携包</button></div>
 </div>
 <div id="viewMgmt" style="display:none">
@@ -384,7 +384,7 @@ ${head}
       return
     }
     if (type === 'portable') {
-      log('step', '▸ 导出 ' + pluginId + ' 便携包（纯 host）…')
+      log('step', '▸ 导出 ' + pluginId + ' 便携包…')
       fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
           ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
@@ -413,7 +413,7 @@ ${head}
       return
     }
     if (type === 'portable') {
-      log('step', '▸ 导出 ' + checked.length + ' 个便携包（纯 host）到放置目录…')
+      log('step', '▸ 导出 ' + checked.length + ' 个便携包到放置目录…')
       fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
           ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
@@ -924,7 +924,7 @@ async function exportBatch(ctx, payload) {
   const results = []
   for (const p of plugins) {
     try {
-      const data = sanitizePortable(exportDynamicPlugin(ctx, p.pluginId, p.packageId, true))
+      const data = sanitizePortable(exportDynamicPlugin(ctx, p.pluginId, p.packageId))
       const artifact = outDir.replace(/[\\/]+$/, '') + '/' + data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const target = await fs.resolve(artifact)
       await fs.writeText(target, JSON.stringify(data, null, 2), undefined, undefined, policy)
@@ -974,7 +974,7 @@ async function packWhole(ctx, payload) {
       const subDir = outDir.replace(/[\\/]+$/, '') + '/' + pluginId + (packageId === '' ? '' : '-' + packageId)
       await runShell(ctx, 'New-Item -ItemType Directory -Force -Path ' + sq(subDir), undefined, policy)
       const tgz = await packSessionPlugin(ctx, { pluginId: pluginId, packageId: packageId, outDir: subDir })
-      const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId, true))
+      const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId))
       const portableName = data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const artifact = subDir.replace(/[\\/]+$/, '') + '/' + portableName
       const target = await fs.resolve(artifact)
