@@ -251,7 +251,10 @@ function injectButton(html) {
   }
   document.addEventListener('click', function (ev) { if (!panel) return; if (panel.contains(ev.target)) return; var b = document.getElementById(ID); if (b && b.contains(ev.target)) return; closePanel() })
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closePanel() })
-  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function () { setInterval(mount, 1000) }) } else { setInterval(mount, 1000) }
+  function restoreClientsOnce() {
+    try { fetch('/packer2/api/restore-clients', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(function () {}) } catch (e) {}
+  }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function () { setInterval(mount, 1000); restoreClientsOnce() }) } else { setInterval(mount, 1000); restoreClientsOnce() }
 })()`
   return html.replace('</body>', '<script>' + script + '</script>\n</body>')
 }
@@ -1322,6 +1325,36 @@ async function autoRestoreResident(ctx) {
   if (sessionId === '') return
   try { await importDynamicPlugin(ctx, { data: { __dshDynamicPlugins: true, plugins: todo }, sessionId: sessionId }, true) } catch (e) { /* 静默 */ }
 }
+// 刷新后恢复常驻 client 半区：凭证（审批）已保留，触发 host run → 发出 cordis/request-run → 浏览器自动装载（无审批）
+async function restoreClientHalves(ctx) {
+  const runner = ctx.get('dynamicCordisRunner')
+  if (runner === undefined || typeof runner.inventory !== 'function' || typeof runner.run !== 'function' || typeof runner.inspectPackage !== 'function') {
+    return { ok: false, message: 'dynamicCordisRunner 不可用' }
+  }
+  const obj = await readFavorites(ctx)
+  const items = (obj.favorites || []).filter(function (f) { return f && f.resident === true && f.code && typeof f.code.client === 'string' && f.code.client.trim() !== '' })
+  if (items.length === 0) return { ok: true, restored: 0, skipped: [] }
+  const rows = runner.inventory() || []
+  let restored = 0
+  const skipped = []
+  for (const f of items) {
+    let row = null
+    for (const r of rows) { if (String(r.pluginId) === String(f.pluginId)) { row = r; break } }
+    if (row === null) { for (const r of rows) { if (pluginCurrentName(r) === f.name) { row = r; break } } }
+    if (row === null) { skipped.push(String(f.name || f.pluginId)); continue }
+    const pkgId = row.currentPackageId !== undefined ? String(row.currentPackageId) : (row.packages && row.packages.length ? String(row.packages[row.packages.length - 1].packageId) : undefined)
+    if (pkgId === undefined) { skipped.push(String(f.name || f.pluginId)); continue }
+    try {
+      const inspected = runner.inspectPackage({ id: row.agentId }, row.pluginId, pkgId)
+      const hasClient = inspected && inspected.code && typeof inspected.code.client === 'string' && inspected.code.client.trim() !== ''
+      if (!hasClient) { skipped.push(String(f.name || f.pluginId)); continue }
+      const res = await runner.run({ id: row.agentId }, row.pluginId, pkgId, 'run', undefined)
+      if (res && res.ok) restored += 1
+      else skipped.push(String(f.name || f.pluginId) + (res && res.message ? '(' + res.message + ')' : ''))
+    } catch (e) { skipped.push(String(f.name || f.pluginId) + '(' + String(e && e.message ? e.message : e) + ')') }
+  }
+  return { ok: true, restored, skipped }
+}
 async function snapshotPlugin(ctx, pluginId) {
   const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, ''))
   const ws = await workspaceRoot(ctx)
@@ -1446,6 +1479,10 @@ async function handleRequest(ctx, req, res) {
     }
     if (path === '/api/restore-favorites' && req.method === 'POST') {
       try { send(res, 200, await restoreFavorites(ctx)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      return
+    }
+    if (path === '/api/restore-clients' && req.method === 'POST') {
+      try { send(res, 200, await restoreClientHalves(ctx)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/browse' && req.method === 'GET') {
