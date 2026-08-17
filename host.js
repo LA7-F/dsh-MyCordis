@@ -1030,8 +1030,8 @@ async function importDynamicPlugin(ctx, payload, runIt) {
     if (item.code && typeof item.code.host === 'string') code.host = item.code.host
     if (item.code && typeof item.code.client === 'string') code.client = item.code.client
     if (code.host === undefined && code.client === undefined) continue
-    // 自动激活只对纯 host 插件；带 client UI 的导入后仅注册不运行，避免其 UI 吞掉主界面（用户可手动启动）
-    const willRun = runIt !== false && !(code.client !== undefined && String(code.client).trim() !== '')
+    // 导入自动激活：host 与 client 半区插件都直接运行（client UI 由动态沙箱提供 React/host/styles，良性插件如计费挂件无副作用）
+    const willRun = runIt !== false
     let targetPluginId = null
     let targetSessionId = ''
     let targetCurrentId = ''
