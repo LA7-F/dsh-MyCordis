@@ -215,13 +215,13 @@ function entrySource(pkgName) {
 function injectButton(html) {
   if (typeof html !== 'string') return html
   // 版本标记：新版脚本已注入 → 幂等返回。早期版本无此标记，靠 dsh-plugin-builder2-entry 识别旧块
-  if (html.includes('packer2-script-v24')) return html
-  // 剥离旧版注入脚本块（早期无版本标记 + v23 块），避免粘性占位阻止新版生效。
-  // 新版块内含 'var P2V = ...' 行，本正则的可选 P2V 组匹配它也无妨——含 v24 标记时上方已幂等返回。
-  html = html.replace(/<script>\s*\(function \(\) \{\s*'use strict'\s*(?:var P2V = '[^']+'\s*)?var ID = 'dsh-plugin-builder2-entry'[\s\S]*?<\/script>/g, '')
+  if (html.includes('packer2-script-v23')) return html
+  // 剥离旧版注入脚本块（无面板自动展开的早期版本），避免粘性占位阻止新版生效。
+  // 新版块内含 'var P2V = ...' 行，不会命中本正则（'use strict' 与 var ID 之间隔了一行），故绝不自删。
+  html = html.replace(/<script>\s*\(function \(\) \{\s*'use strict'\s*var ID = 'dsh-plugin-builder2-entry'[\s\S]*?<\/script>/g, '')
   const script = `(function () {
   'use strict'
-  var P2V = 'packer2-script-v24'
+  var P2V = 'packer2-script-v23'
   var ID = 'dsh-plugin-builder2-entry'
   var PANEL_ID = 'dsh-plugin-builder2-panel'
   var panel = null
@@ -294,42 +294,7 @@ function injectButton(html) {
       } else if (tries > 8) { clearInterval(timer) }
     }, 700)
   }
-  // badge 兜底：CordisPanel 在没有插件/审批时整组件 return null（badge 消失）。
-  // 此时在 sidebar footer 动作区补一个常驻按钮，点击打开「我的Cordis」面板查看插件/自启动状态。
-  var FB_ID = 'dsh-plugin-builder2-badge-fallback'
-  function findFooterSlot() {
-    // 目标路径: ...GGBpKq_footArea > GGBpKq_footerActions > div > f3YV8G_footerButtons（CSS Modules 哈希前缀不定）
-    // 稳定锚点：找包含 footerButtons/footerActions 类名的容器；找不到就退到 Session log 按钮旁
-    var cands = document.querySelectorAll('[class*="footerButtons"], [class*="footerActions"], [class*="footArea"]')
-    for (var i = 0; i < cands.length; i++) {
-      if (cands[i].getBoundingClientRect().height > 0) return cands[i]
-    }
-    return null
-  }
-  function ensureBadgeFallback() {
-    var native = document.querySelector('[data-cordis-badge]')
-    var fb = document.getElementById(FB_ID)
-    if (native) { if (fb && fb.parentNode) fb.parentNode.removeChild(fb); return }
-    if (fb) return
-    var slot = findFooterSlot()
-    if (!slot) return
-    var b = el('button', '插件状态')
-    b.id = FB_ID
-    b.type = 'button'
-    b.title = '我的Cordis：查看会话级动态插件与自启动状态'
-    b.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;height:32px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2,#555555);border-radius:18px;color:var(--dsw-alias-label-primary,inherit);background:transparent;font-family:var(--dsw-font-family,sans-serif);font-size:13px;line-height:20px;cursor:pointer;white-space:nowrap;user-select:none;margin:0 2px'
-    b.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); toggle(b) }
-    slot.appendChild(b)
-  }
-  if (typeof MutationObserver !== 'undefined') {
-    try {
-      new MutationObserver(function () { ensureBadgeFallback() })
-        .observe(document.documentElement, { childList: true, subtree: true })
-    } catch (e) { setInterval(ensureBadgeFallback, 1500) }
-  } else {
-    setInterval(ensureBadgeFallback, 1500)
-  }
-  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function () { setInterval(mount, 1000); autoOpenCordisPanel(); ensureBadgeFallback() }) } else { setInterval(mount, 1000); autoOpenCordisPanel(); ensureBadgeFallback() }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function () { setInterval(mount, 1000); autoOpenCordisPanel() }) } else { setInterval(mount, 1000); autoOpenCordisPanel() }
 })()`
   return html.replace('</body>', '<script>' + script + '</script>\n</body>')
 }
