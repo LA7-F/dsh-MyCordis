@@ -52,6 +52,23 @@ pnpm dsh plugin --profile web add file:./dsh-MyCordis    # copy install
 pnpm dsh plugin --profile web add link:./dsh-MyCordis    # link install (source edits take effect immediately; good for development)
 ```
 
+### Method 3: local dsh install bundle (.tgz)
+
+Run it from the directory containing the tarball (**the `./` prefix is required**):
+
+```sh
+dsh plugin --profile web add ./<plugin-name>-0.1.0.tgz
+```
+
+Or use an absolute path / the `file:` prefix:
+
+```sh
+dsh plugin --profile web add "C:\path\to\<plugin-name>-0.1.0.tgz"
+dsh plugin --profile web add file:./<plugin-name>-0.1.0.tgz
+```
+
+> ⚠ Do not use a bare filename (e.g. `add mycrd-2-0.1.0.tgz`): `dsh plugin` runs pnpm inside the profile directory (`$DSH_HOME/profiles/web/`). Only `./`/`../`-prefixed relative paths or absolute paths are anchored to your current directory; a bare filename is looked up inside the profile directory and will fail.
+
 ### Repository layout (prerequisite for git install)
 
 ```

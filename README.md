@@ -52,6 +52,23 @@ pnpm dsh plugin --profile web add file:./dsh-MyCordis    # 拷贝安装
 pnpm dsh plugin --profile web add link:./dsh-MyCordis    # 链接安装（改源码即时生效，适合开发调试）
 ```
 
+### 方式三：本地 dsh 安装包（.tgz）
+
+在 tgz 所在目录执行（**必须带 `./` 前缀**）：
+
+```sh
+dsh plugin --profile web add ./<插件名>-0.1.0.tgz
+```
+
+或用绝对路径 / `file:` 前缀：
+
+```sh
+dsh plugin --profile web add "C:\path\to\<插件名>-0.1.0.tgz"
+dsh plugin --profile web add file:./<插件名>-0.1.0.tgz
+```
+
+> ⚠ 不要写裸文件名（如 `add mycrd-2-0.1.0.tgz`）：`dsh plugin` 会在 profile 目录（`$DSH_HOME/profiles/web/`）里执行 pnpm，只有 `./`、`../` 开头的相对路径或绝对路径才会被锚定到你当前的目录；裸文件名会在 profile 目录里找文件，必然失败。
+
 ### 仓库结构（git 安装前提）
 
 ```
