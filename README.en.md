@@ -65,7 +65,7 @@ The plugin is cloned into folder **B**: `E:\harness\dsh-MyCordis`
 cd E:\harness\dsh-MyCordis
 pnpm pack
 cd E:\harness\deepseek-harness
-dsh plugin --profile web add E:\harness\deep seek harness\your-plugin-0.1.0.tgz
+dsh plugin --profile web add E:\harness\deepseek-harness\your-plugin-0.1.0.tgz
 pnpm dsh --profile web                                      # restart dsh
 ```
 
