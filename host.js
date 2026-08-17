@@ -723,7 +723,7 @@ function listPlugins(ctx) {
     return { available: false, reason: 'dynamicCordisRunner 不可用（组合未挂载 cordis-host-runner）' }
   }
   let rows
-  try { rows = runner.inventory() ?? [] } catch (e) { return { available: false, reason: '枚举失败: ' + String(e && e.message ? e.message : e) } }
+  try { rows = runner.inventory() ?? [] } catch (e) { return { available: false, reason: '枚举失败: ' + safeErrorMsg(e) } }
   const plugins = rows.map(function (r) {
     const latest = r.latestRun
     return {
@@ -1411,7 +1411,7 @@ async function handleRequest(ctx, req, res) {
         u.query.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
       } catch (e) { send(res, 400, { ok: false, message: '查询参数不是合法编码' }); return }
       const profile = String(qs.profile || 'web')
-      try { send(res, 200, await installedPlugins(ctx, profile)) } catch (e) { send(res, 200, { profile, error: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await installedPlugins(ctx, profile)) } catch (e) { send(res, 200, { profile, error: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/uninstall' && req.method === 'POST') {
@@ -1478,7 +1478,7 @@ async function handleRequest(ctx, req, res) {
         send(res, 200, { picked: null, error: '原生目录选择不可用' })
         return
       }
-      try { const picked = await pickDirNative(ctx, body && body.start); send(res, 200, { picked }) } catch (e) { send(res, 200, { picked: null, error: String(e && e.message ? e.message : e) }) }
+      try { const picked = await pickDirNative(ctx, body && body.start); send(res, 200, { picked }) } catch (e) { send(res, 200, { picked: null, error: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/browse/create' && req.method === 'POST') {
