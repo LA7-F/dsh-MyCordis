@@ -969,7 +969,9 @@ async function exportBatch(ctx, payload) {
   const results = []
   for (const p of plugins) {
     try {
-      const data = sanitizePortable(exportDynamicPlugin(ctx, p.pluginId, p.packageId))
+      const raw = exportDynamicPlugin(ctx, p.pluginId, p.packageId)
+      const data = sanitizePortable(raw)
+      if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
       const artifact = outDir.replace(/[\\/]+$/, '') + '/' + data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const target = await fs.resolve(artifact)
       await fs.writeText(target, JSON.stringify(data, null, 2), undefined, undefined, policy)
@@ -1020,7 +1022,9 @@ async function packWhole(ctx, payload) {
       const subDir = outDir.replace(/[\\/]+$/, '') + '/' + pluginId + (packageId === '' ? '' : '-' + packageId)
       await runShell(ctx, 'New-Item -ItemType Directory -Force -Path ' + sq(subDir), undefined, policy)
       const tgz = await packSessionPlugin(ctx, { pluginId: pluginId, packageId: packageId, outDir: subDir })
-      const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId))
+      const raw = exportDynamicPlugin(ctx, pluginId, packageId)
+      const data = sanitizePortable(raw)
+      if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
       const portableName = data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const artifact = subDir.replace(/[\\/]+$/, '') + '/' + portableName
       const target = await fs.resolve(artifact)
@@ -1054,6 +1058,14 @@ async function importDynamicPlugin(ctx, payload, runIt) {
   else if (data && data.__dshDynamicPlugin === true) items = [data]
   else throw new Error('不是便携动态插件包')
   let sessionId = String((payload && payload.sessionId) || (items.length ? items[0].ownerSessionId : '') || '')
+  // 隐私缓存还原：便携包只有假 id，本机缓存 packer2-sessions.json 记录 pluginId→真实会话 id；
+  // 导入/恢复时按 pluginId 查缓存拿到真 id 直接运行（跨机器/无缓存时才走下方 harness 兜底）。
+  if (isFakeSessionId(sessionId) && items.length > 0 && items[0].pluginId) {
+    try {
+      const cached = await realSessionFor(ctx, String(items[0].pluginId))
+      if (cached !== '') sessionId = cached
+    } catch (e) { /* 保持原值 */ }
+  }
   if (isFakeSessionId(sessionId)) sessionId = await resolveCurrentSessionId(ctx)
   if (sessionId === '') {
     // 兜底：取当前进程任一已存在会话（与自动恢复一致）
@@ -1132,6 +1144,8 @@ async function importDynamicPlugin(ctx, payload, runIt) {
       }
     }
     results.push({ pluginId: String(receipt.pluginId), packageId: String(receipt.packageId), name })
+    // 导入/恢复成功后，把「便携包 pluginId → 真实会话 id」记入本地缓存，供下次直接还原
+    try { await rememberRealSession(ctx, String(receipt.pluginId), useSessionId) } catch (e) { /* 静默 */ }
   }
   return { ok: true, results }
 }
@@ -1248,6 +1262,43 @@ async function favoritesPath(ctx) {
   const ws = await workspaceRoot(ctx)
   return ws.replace(/[\\/]+$/, '') + '/packer2-favorites.json'
 }
+// ── 真实会话 id 缓存（隐私设计）：真 id 只写进本地缓存文件 packer2-sessions.json，
+//    该文件不进便携包、不参与打包、建议加入 .gitignore。便携包/收藏导出始终只有假 id，
+//    导入/恢复时先查缓存还原真 id 直接运行，查不到才走 harness 兜底解析。 ──
+async function sessionsCachePath(ctx) {
+  const ws = await workspaceRoot(ctx)
+  return ws.replace(/[\\/]+$/, '') + '/packer2-sessions.json'
+}
+async function readSessionsCache(ctx) {
+  const fs = ctx.get('fs')
+  if (fs === undefined) return {}
+  try {
+    const t = await fs.resolve(await sessionsCachePath(ctx))
+    const obj = JSON.parse(await fs.readText(t))
+    return (obj && typeof obj === 'object' && obj.sessions && typeof obj.sessions === 'object') ? obj.sessions : {}
+  } catch (e) { return {} }
+}
+async function writeSessionsCache(ctx, sessions) {
+  const fs = ctx.get('fs')
+  if (fs === undefined) return
+  const t = await fs.resolve(await sessionsCachePath(ctx))
+  await fs.writeText(t, JSON.stringify({ sessions: sessions, note: '本地会话 id 缓存：仅供本机导入/恢复还原用；永不写入便携包，建议加入 .gitignore' }, null, 2))
+}
+async function rememberRealSession(ctx, pluginId, realSessionId) {
+  if (!pluginId || !realSessionId || isFakeSessionId(realSessionId)) return
+  return favSerialize(async function () {
+    const sessions = await readSessionsCache(ctx)
+    sessions[String(pluginId)] = String(realSessionId)
+    await writeSessionsCache(ctx, sessions)
+  })
+}
+async function realSessionFor(ctx, pluginId) {
+  try {
+    const sessions = await readSessionsCache(ctx)
+    const sid = sessions[String(pluginId)]
+    return (sid && !isFakeSessionId(sid)) ? String(sid) : ''
+  } catch (e) { return '' }
+}
 async function readFavorites(ctx) {
   const fs = ctx.get('fs')
   if (fs === undefined) return { favorites: [] }
@@ -1266,7 +1317,9 @@ async function writeFavorites(ctx, obj) {
 }
 async function favoriteAdd(ctx, pluginId, packageId) {
   return favSerialize(async function () {
-    const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId))
+    const raw = exportDynamicPlugin(ctx, pluginId, packageId)
+    const data = sanitizePortable(raw)
+    if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
     const obj = await readFavorites(ctx)
     const idx = obj.favorites.findIndex(function (f) { return f.pluginId === data.pluginId || (f.name && data.name && f.name === data.name) })
     if (idx >= 0) { data.resident = obj.favorites[idx].resident; obj.favorites[idx] = data }
@@ -1295,7 +1348,9 @@ async function favoriteRemove(ctx, pluginId) {
 async function favoriteSetResident(ctx, pluginId, packageId, resident) {
   return favSerialize(async function () {
     const obj = await readFavorites(ctx)
-    const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId))
+    const raw = exportDynamicPlugin(ctx, pluginId, packageId)
+    const data = sanitizePortable(raw)
+    if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
     const idx = obj.favorites.findIndex(function (f) { return f.pluginId === data.pluginId || (f.name && data.name && f.name === data.name) })
     if (idx >= 0) {
       obj.favorites[idx] = data
@@ -1372,13 +1427,24 @@ async function autoRestoreResident(ctx) {
       if (currentSid === '' && typeof agents.roots === 'function') { const roots = agents.roots(); if (roots && roots.length > 0) currentSid = String(roots[0].id || '') }
     }
   } catch (e) { /* 保持空 */ }
-  // 会话必须真实存在：假 ID（脱敏归属键）不能作为运行目标，取当前会话 / 任一已存在会话 / 首个 root
-  const sessionId = currentSid || sid || ''
+  // 会话必须真实存在：优先从本地缓存还原（pluginId→真实会话 id），查不到再取当前会话/任一已存在会话/首个 root
+  let sessionId = currentSid || sid || ''
+  if (sessionId === '' || isFakeSessionId(sessionId)) {
+    try {
+      for (const it of todo) {
+        if (!it || !it.pluginId) continue
+        const cached = await realSessionFor(ctx, String(it.pluginId))
+        if (cached !== '') { sessionId = cached; break }
+      }
+    } catch (e) { /* 保持原值 */ }
+  }
   if (sessionId === '' || isFakeSessionId(sessionId)) return
   try { await importDynamicPlugin(ctx, { data: { __dshDynamicPlugins: true, plugins: todo }, sessionId: sessionId }, true) } catch (e) { /* 静默 */ }
 }
 async function snapshotPlugin(ctx, pluginId) {
-  const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, ''))
+  const raw = exportDynamicPlugin(ctx, pluginId, '')
+  const data = sanitizePortable(raw)
+  if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
   const ws = await workspaceRoot(ctx)
   if (!ws) throw new Error('无法确定工作区根目录')
   const dir = ws.replace(/[\\/]+$/, '') + '/packer2-snapshot'
@@ -1421,7 +1487,7 @@ async function handleRequest(ctx, req, res) {
       try {
         p.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
       } catch (e) { send(res, 400, { ok: false, message: '查询参数不是合法编码' }); return }
-      try { const data = sanitizePortable(exportDynamicPlugin(ctx, qs.pluginId, qs.packageId)); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
+      try { const raw = exportDynamicPlugin(ctx, qs.pluginId, qs.packageId); const data = sanitizePortable(raw); if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/export-batch' && req.method === 'POST') {
