@@ -192,6 +192,10 @@ npm package layout: `package.json` (declares the `dsh.bundle.patch` composition 
 - The client half is browser-sandbox code; when synthesizing a `.tgz` it is archived but not executed (does not affect host functionality)
 - The output directory defaults to inside the workspace; output outside the workspace triggers a sandbox elevation; consider a dedicated workspace for plugin authoring
 
+## Open source
+
+When open-sourcing plugins packed with MyCordis, please add the `dsh-mycordis` topic.
+
 ## References
 
 - [Cordis](https://github.com/cordiverse/cordis) — the underlying plugin runtime

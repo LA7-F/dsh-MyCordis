@@ -196,6 +196,10 @@ npm 包结构：`package.json`（含 `dsh.bundle.patch` 组合补丁声明）、
 - client 半区为浏览器沙箱代码，合成 `.tgz` 时仅存档不执行（不影响 host 功能）
 - 输出目录默认在工作区内；工作区外输出会触发沙箱提升，建议建一个专属工作区进行插件创作
 
+## 开源
+
+使用 我的Cordis 打包的插件，开源时请添加 `dsh-mycordis` 话题。
+
 ## 参考
 
 - [Cordis](https://github.com/cordiverse/cordis) —— 底层插件运行时
