@@ -14,7 +14,8 @@ function send(res, status, obj) {
 function sendDownload(res, filename, obj) {
   const body = JSON.stringify(obj, null, 2)
   const bytes = new TextEncoder().encode(body).length
-  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-length': bytes, 'content-disposition': 'attachment; filename="' + filename + '"', 'cache-control': 'no-store' })
+  const safeName = sanitizeFilename(filename)
+  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-length': bytes, 'content-disposition': 'attachment; filename="' + safeName + '"', 'cache-control': 'no-store' })
   res.end(body)
 }
 function sendHtml(res, html) {
@@ -23,7 +24,7 @@ function sendHtml(res, html) {
   res.end(html)
 }
 // 请求体上限：防止超大 body 耗尽内存（DoS）
-const MAX_BODY_BYTES = 10 * 1024 * 1024
+const MAX_BODY_BYTES = 80 * 1024 * 1024
 // ── 便携包导出脱敏：ownerSessionId 用假 ID 替代，防止泄露会话标识；导入时自动落到当前/任一已存在会话 ──
 const FAKE_SESSION_ID = 'session-00000000-0000-4000-8000-000000000000'
 function isFakeSessionId(id) {
@@ -52,55 +53,100 @@ async function resolveCurrentSessionId(ctx) {
 }
 function readBody(req) {
   return new Promise((resolvePromise, reject) => {
-    const chunks = []
     let total = 0
     let overflow = false
+    let text = ''
+    const td = new TextDecoder('utf-8')
     req.on('data', (c) => {
       if (overflow) return
       total += c.length
       if (total > MAX_BODY_BYTES) { overflow = true; reject(new Error('body-too-large')); return }
-      try { chunks.push(String(c)) } catch { chunks.push('') }
+      try { text += td.decode(c, { stream: true }) } catch (e) { try { text += String(c) } catch (e2) { text += '' } }
     })
-    req.on('end', () => { if (!overflow) resolvePromise(chunks.join('')) })
+    req.on('end', () => {
+      if (overflow) return
+      try { text += td.decode() } catch (e) { /* ignore */ }
+      resolvePromise(text)
+    })
     req.on('error', reject)
   })
 }
-// ── 请求信任栅栏（对齐 dsh 主 API 的 isTrustedApiRequest：loopback Host + 同源 Origin + Fetch-Metadata）──
-function parseAuthorityHost(authority) {
+// ── 请求信任栅栏（v2 加固）：loopback Host + 同源 Origin（scheme://host:port 精确比对）+ 写操作强制 Origin + socket 远端校验 ──
+function parseAuthority(authority) {
   const a = String(authority || '').trim()
-  if (a === '') return ''
+  let host = ''
+  let port = ''
+  let rest = a
   if (a.startsWith('[')) {
     const end = a.indexOf(']')
-    return end === -1 ? a.toLowerCase() : a.slice(0, end + 1).toLowerCase()
+    if (end === -1) return { host: a.toLowerCase(), port: '' }
+    host = a.slice(0, end + 1).toLowerCase()
+    rest = a.slice(end + 1)
+  } else {
+    const i = a.indexOf(':')
+    host = (i === -1 ? a : a.slice(0, i)).toLowerCase()
+    rest = i === -1 ? '' : a.slice(i + 1)
   }
-  const i = a.indexOf(':')
-  return (i === -1 ? a : a.slice(0, i)).toLowerCase()
+  const j = rest.search(/[/?#]/)
+  if (j !== -1) rest = rest.slice(0, j)
+  if (rest.startsWith(':')) port = rest.slice(1)
+  return { host, port }
 }
 function isLoopbackHostname(h) {
   if (h === 'localhost' || h === '::1' || h === '[::1]') return true
   return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)
 }
-function originHost(origin) {
+function parseOrigin(origin) {
   const s = String(origin || '').trim()
-  if (s === '' || s === 'null') return ''
-  const i = s.indexOf('://')
-  const rest = i === -1 ? s : s.slice(i + 3)
-  const j = rest.search(/[/?#]/)
-  return parseAuthorityHost(j === -1 ? rest : rest.slice(0, j))
+  if (s === '' || s === 'null') return null
+  const m = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]+)/i.exec(s)
+  if (!m) return null
+  return { scheme: m[1].toLowerCase(), ...parseAuthority(m[2]) }
+}
+function defaultPort(scheme) {
+  return scheme === 'https' ? '443' : scheme === 'http' ? '80' : ''
 }
 function isTrustedRequest(req) {
   const h = (req && req.headers) || {}
-  const host = h.host
-  if (typeof host !== 'string' || host === '') return false
-  const hostName = parseAuthorityHost(host)
-  if (!isLoopbackHostname(hostName)) return false
+  const hostHeader = h.host
+  if (typeof hostHeader !== 'string' || hostHeader === '') return false
+  const hostAuth = parseAuthority(hostHeader)
+  if (!isLoopbackHostname(hostAuth.host)) return false
   if (h['sec-fetch-site'] === 'cross-site') return false
+  // 纵深防御：socket 远端必须是 loopback（IPv4-mapped 归一化后）
+  const ra = String((req.socket && req.socket.remoteAddress) || '').replace(/^::ffff:/, '')
+  if (ra !== '' && !isLoopbackHostname(ra)) return false
+  const method = String(req.method || 'GET').toUpperCase()
+  const writeMethod = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE'
   const origin = h.origin
-  if (origin === undefined) return true
+  if (origin === undefined) return !writeMethod
   if (String(origin) === 'null') return false
-  const oh = originHost(String(origin))
-  if (oh === '') return false
-  return oh === hostName
+  const o = parseOrigin(origin)
+  if (!o || !isLoopbackHostname(o.host)) return false
+  const reqScheme = (req.socket && req.socket.encrypted) ? 'https' : 'http'
+  if (o.scheme !== reqScheme) return false
+  const reqPort = hostAuth.port === '' ? defaultPort(reqScheme) : hostAuth.port
+  const oPort = o.port === '' ? defaultPort(o.scheme) : o.port
+  if (oPort !== reqPort) return false
+  return o.host === hostAuth.host
+}
+// ── 其它安全助手：profile 白名单 / 路径规范化 / 文件名净化 ──
+function validProfile(p) {
+  return /^[a-zA-Z0-9_-]{1,32}$/.test(String(p || ''))
+}
+function normPath(p) {
+  const s = String(p || '').replace(/\\/g, '/')
+  const abs = s.startsWith('/') || /^[a-zA-Z]:\//.test(s)
+  const out = []
+  for (const seg of s.split('/')) {
+    if (seg === '' || seg === '.') continue
+    if (seg === '..') { if (out.length) out.pop() }
+    else out.push(seg)
+  }
+  return (abs ? '/' : '') + out.join('/')
+}
+function sanitizeFilename(name) {
+  return String(name || 'download').replace(/[\r\n]/g, '').replace(/[^\w.\-]/g, '_')
 }
 function parsePath(reqUrl) {
   const raw = String(reqUrl || '/')
@@ -674,7 +720,6 @@ function listPlugins(ctx) {
     const latest = r.latestRun
     return {
       pluginId: String(r.pluginId),
-      agentId: String(r.agentId),
       packages: (r.packages || []).map(function (p) { return { packageId: String(p.packageId), name: p.name, hasHostHalf: p.hasHostHalf === true, hasClientHalf: p.hasClientHalf === true } }),
       ...(r.currentPackageId === undefined ? {} : { currentPackageId: String(r.currentPackageId) }),
       ...(latest === undefined ? {} : { latestRun: { status: latest.status } }),
@@ -739,7 +784,7 @@ async function uploadBundle(ctx, payload) {
   const name = String((payload && payload.name) || '').trim()
   const b64 = String((payload && payload.base64) || '').replace(/\s+/g, '')
   if (name === '' || b64 === '') throw new Error('缺 name/base64')
-  if (b64.length > 70 * 1024 * 1024) throw new Error('文件过大（>50MB）')
+  if (b64.length > 70 * 1024 * 1024) throw new Error('文件过大')
   const safeName = (name.split(/[\\/]/).pop() || 'bundle.tgz').replace(/[^\w.\- ]/g, '_')
   const ws = await workspaceRoot(ctx)
   if (!ws) throw new Error('无法确定工作区根目录')
@@ -785,9 +830,9 @@ async function packSessionPlugin(ctx, payload) {
   if (!ws) throw new Error('无法确定工作区根目录')
   const staging = ws.replace(/[\\/]+$/, '') + '/.packer2/staging-' + rand()
   const outDir = outDirRaw === '' ? ws.replace(/[\\/]+$/, '') + '/packer2-out' : outDirRaw
-  const wsNorm = String(ws).replace(/[\\/]+$/, '').toLowerCase()
-  const outNorm = String(outDir).replace(/[\\/]+$/, '').toLowerCase()
-  const outside = outNorm !== wsNorm && !outNorm.startsWith(wsNorm + '\\') && !outNorm.startsWith(wsNorm + '/')
+  const wsNorm = normPath(ws).toLowerCase()
+  const outNorm = normPath(outDir).toLowerCase()
+  const outside = outNorm !== wsNorm && !outNorm.startsWith(wsNorm + '/')
   const policy = outside ? { mode: 'danger-full-access' } : undefined
   const fs = ctx.get('fs')
   if (fs === undefined) throw new Error('fs 服务不可用')
@@ -868,9 +913,9 @@ async function exportBatch(ctx, payload) {
   const ws = await workspaceRoot(ctx)
   if (!ws) throw new Error('无法确定工作区根目录')
   const outDir = outDirRaw === '' ? ws.replace(/[\\/]+$/, '') + '/packer2-out' : outDirRaw
-  const wsNorm = String(ws).replace(/[\\/]+$/, '').toLowerCase()
-  const outNorm = String(outDir).replace(/[\\/]+$/, '').toLowerCase()
-  const outside = outNorm !== wsNorm && !outNorm.startsWith(wsNorm + '\\') && !outNorm.startsWith(wsNorm + '/')
+  const wsNorm = normPath(ws).toLowerCase()
+  const outNorm = normPath(outDir).toLowerCase()
+  const outside = outNorm !== wsNorm && !outNorm.startsWith(wsNorm + '/')
   const policy = outside ? { mode: 'danger-full-access' } : undefined
   const fs = ctx.get('fs')
   if (fs === undefined) throw new Error('fs 服务不可用')
@@ -912,9 +957,9 @@ async function packWhole(ctx, payload) {
   const ws = await workspaceRoot(ctx)
   if (!ws) throw new Error('无法确定工作区根目录')
   const outDir = outDirRaw === '' ? ws.replace(/[\\/]+$/, '') + '/packer2-out' : outDirRaw
-  const wsNorm = String(ws).replace(/[\\/]+$/, '').toLowerCase()
-  const outNorm = String(outDir).replace(/[\\/]+$/, '').toLowerCase()
-  const outside = outNorm !== wsNorm && !outNorm.startsWith(wsNorm + '\\') && !outNorm.startsWith(wsNorm + '/')
+  const wsNorm = normPath(ws).toLowerCase()
+  const outNorm = normPath(outDir).toLowerCase()
+  const outside = outNorm !== wsNorm && !outNorm.startsWith(wsNorm + '/')
   const policy = outside ? { mode: 'danger-full-access' } : undefined
   const fs = ctx.get('fs')
   if (fs === undefined) throw new Error('fs 服务不可用')
@@ -1070,6 +1115,7 @@ async function dedupePlugins(ctx) {
 async function installBundle(ctx, payload) {
   const path = String(payload && payload.path || '').trim()
   const profile = String(payload && payload.profile || 'web').trim()
+  if (!validProfile(profile)) throw new Error('非法的 profile 名称（仅允许字母/数字/-/_）')
   if (!path) throw new Error('缺安装路径')
   const ws = await workspaceRoot(ctx) || ''
   let target = path
@@ -1098,6 +1144,7 @@ async function dshHome(ctx) {
   return (out || '').replace(/[\\/]+$/, '')
 }
 async function installedPlugins(ctx, profile) {
+  if (!validProfile(profile)) return { profile, error: '非法的 profile 名称（仅允许字母/数字/-/_）' }
   const home = await dshHome(ctx)
   const manifestPath = home + '/profiles/' + profile + '/package.json'
   let text
@@ -1105,7 +1152,8 @@ async function installedPlugins(ctx, profile) {
     const res = await runShell(ctx, 'Get-Content -Raw -LiteralPath ' + sq(manifestPath), undefined, { mode: 'danger-full-access' })
     text = (res.stdout && res.stdout.text) || ''
   } catch (e) {
-    return { profile, error: '读取 profile 失败: ' + String(e && e.message ? e.message : e) }
+    console.log('installedPlugins 读取失败: ' + String(e && e.message ? e.message : e))
+    return { profile, error: '读取 profile 失败' }
   }
   let manifest
   try { manifest = JSON.parse(text) } catch (e) { return { profile, error: 'profile manifest 解析失败' } }
@@ -1120,6 +1168,7 @@ async function installedPlugins(ctx, profile) {
 async function uninstallBundle(ctx, payload) {
   const name = String(payload && payload.name || '').trim()
   const profile = String(payload && payload.profile || 'web').trim()
+  if (!validProfile(profile)) throw new Error('非法的 profile 名称（仅允许字母/数字/-/_）')
   if (!name) throw new Error('缺插件名')
   const ws = await workspaceRoot(ctx)
   const cliPath = ws.replace(/[\\/]+$/, '') + '/apps/cli/lib/bin.js'
@@ -1299,63 +1348,67 @@ async function handleRequest(ctx, req, res) {
     }
     if (path === '/api/snapshot' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await snapshotPlugin(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/export' && req.method === 'GET') {
       const p = u.query
       const qs = {}
-      p.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
+      try {
+        p.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
+      } catch (e) { send(res, 400, { ok: false, message: '查询参数不是合法编码' }); return }
       try { const data = sanitizePortable(exportDynamicPlugin(ctx, qs.pluginId, qs.packageId)); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/export-batch' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await exportBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/pack-batch' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await packBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/pack-whole' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await packWhole(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/import' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await importDynamicPlugin(ctx, body, false)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/install' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await installBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/upload' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await uploadBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/installed' && req.method === 'GET') {
       const qs = {}
-      u.query.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
+      try {
+        u.query.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
+      } catch (e) { send(res, 400, { ok: false, message: '查询参数不是合法编码' }); return }
       const profile = String(qs.profile || 'web')
       try { send(res, 200, await installedPlugins(ctx, profile)) } catch (e) { send(res, 200, { profile, error: String(e && e.message ? e.message : e) }) }
       return
     }
     if (path === '/api/uninstall' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await uninstallBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
@@ -1369,7 +1422,7 @@ async function handleRequest(ctx, req, res) {
     }
     if (path === '/api/favorite' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try {
         if (body && body.action === 'remove') send(res, 200, await favoriteRemove(ctx, String(body.pluginId || '')))
         else if (body && body.action === 'resident') send(res, 200, await favoriteSetResident(ctx, String(body.pluginId || ''), String(body.packageId || ''), body.resident === true))
@@ -1379,7 +1432,7 @@ async function handleRequest(ctx, req, res) {
     }
     if (path === '/api/restore-one' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await restoreOne(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
@@ -1403,7 +1456,7 @@ async function handleRequest(ctx, req, res) {
     if (path === '/api/browse/pick' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) {
-        if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return }
+        if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return }
         body = {}
       }
       const svc = ctx.get('directoryPicker')
@@ -1416,7 +1469,7 @@ async function handleRequest(ctx, req, res) {
     }
     if (path === '/api/browse/create' && req.method === 'POST') {
       let body
-      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       const svc = ctx.get('directoryPicker')
       if (svc === undefined || typeof svc.capability !== 'function') { send(res, 200, { ok: false, message: 'directoryPicker 服务不可用' }); return }
       const cap = svc.capability()
@@ -1425,7 +1478,7 @@ async function handleRequest(ctx, req, res) {
     }
     if (path === '/api/pack' && req.method === 'POST') {
       let payload
-      try { payload = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大（>10MB）' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { payload = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
       try { send(res, 200, await packSessionPlugin(ctx, payload || {})) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
       return
     }
@@ -1433,7 +1486,7 @@ async function handleRequest(ctx, req, res) {
   } catch (error) {
     const msg = String(error && error.message ? error.message : error)
     const status = msg === 'body-too-large' ? 413 : 500
-    try { send(res, status, { ok: false, message: msg === 'body-too-large' ? '请求体过大（>10MB）' : msg }) } catch (e) { res.destroy() }
+    try { send(res, status, { ok: false, message: msg === 'body-too-large' ? '请求体过大' : msg }) } catch (e) { res.destroy() }
   }
 }
 return {
