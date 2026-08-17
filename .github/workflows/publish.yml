@@ -1,0 +1,24 @@
+name: Publish to npm
+
+# 触发方式：
+#  1) 推送 v* 标签（推荐：npm version patch && git push --tags）
+#  2) 仓库 Actions 页手动触发（workflow_dispatch）
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org/
+      # 纯 JS 无构建步骤；如需构建可在 publish 前加 run: npm run build
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
