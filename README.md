@@ -12,15 +12,15 @@ Cordis「**便携包**」目前可能只支持Windows端使用，后续会加配
 
 ## 背景：
 
-在 dsh「**一切皆插件**」架构的背景下，创造模式与插件生成更便捷，但是将其打包成[dsh安装包]或启动保留的插件仍会困扰我们，所以开发此功能为后续社区繁荣做出一点贡献，省点token，欢迎大家上传自己通过此插件打包的内容。
+在 dsh「**一切皆插件**」架构的背景下，用创造模式来插件生成更便捷，但是将其打包成[dsh安装包]或启动保留的插件仍会困扰我们，所以开发此功能为后续社区繁荣做出一点贡献，省点token，欢迎大家上传自己通过此插件打包的内容。
 
-## 特性
+## 使用
 
 - **打包整包**：一个插件同时产出 dsh 安装包（`.tgz`）与便携包（`.dshplugin.json`）到同一文件夹，每插件一个子文件夹，支持单个与批量一键打包
 - **dsh 包**（`.tgz`）：`pnpm pack` 合成的真实安装包，可用 `dsh plugin add` 安装，重启 dsh 生效
 - **便携包**（`.dshplugin.json`）：纯 host 定义文件，跨会话导入，或由新会话 AI 直接 `read` 后 `cordis_define` 重建（省 token）
 - 批量 / 单个打包，三种打包类型即时切换
-- 安装 / 卸载 dsh 插件（profile 级真实安装）
+- 安装 / 卸载 dsh 插件（profile 级真实安装，.tgz实际为完整文件的压缩包）
 - 导入便携包（仅注册不运行）
 - 收藏（☆）/ 常驻（★ 重启自动恢复）/ 恢复（启动）/ 复制跨会话定位信息
 - 同名插件去重（按名称合并版本）
@@ -30,46 +30,50 @@ Cordis「**便携包**」目前可能只支持Windows端使用，后续会加配
 
 仓库：<https://github.com/LA7-F/dsh-MyCordis>
 
+假设dsh根目录为A：E:\harness\deepseek-harness
+
 ### 方式一（推荐）：从 git 安装（真实安装，重启 dsh 生效）
 
 ```sh
-pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git
+pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git #建议在根目录A下执行
+pnpm dsh --profile web								  #重启 dsh
 ```
 
 ### 方式二：先拉取再安装（git clone 后本地安装）
 
+插件被拉取到文件夹B：E:\harness\dsh-MyCordis
+
 ```sh
-git clone https://github.com/LA7-F/dsh-MyCordis.git
-cd dsh-MyCordis
-pnpm dsh plugin --profile web add .            # 以当前目录作为本地依赖安装
+git clone https://github.com/LA7-F/dsh-MyCordis.git         #在你想拉取到的B文件夹执行
+pnpm dsh plugin --profile web add E:\harness\dsh-MyCordis   #建议在dsh项目根目录A中执行
+pnpm dsh --profile web								        #重启 dsh
 ```
 
 也支持相对路径 / pnpm 的 `file:`、`link:` 写法：
 
 ```sh
-pnpm dsh plugin --profile web add ../dsh-MyCordis        # 相对路径（dsh 会自动锚定到当前目录）
-pnpm dsh plugin --profile web add file:./dsh-MyCordis    # 拷贝安装
-pnpm dsh plugin --profile web add link:./dsh-MyCordis    # 链接安装（改源码即时生效，适合开发调试）
+pnpm dsh plugin --profile web add ..\dsh-MyCordis        # 相对路径（dsh 会自动锚定到当前目录）
+pnpm dsh plugin --profile web add file:.\dsh-MyCordis    # 拷贝安装
+pnpm dsh plugin --profile web add link:.\dsh-MyCordis    # 链接安装（改源码即时生效，适合开发调试）
 ```
 
 ### 方式三：本地 dsh 安装包（.tgz）
 
+插件被拉取到文件夹B：E:\harness\dsh-MyCordis
+
 在 tgz 所在目录执行（**必须带 `./` 前缀**）：
 
 ```sh
-dsh plugin --profile web add ./<插件名>-0.1.0.tgz
+cd E:\harness\dsh-MyCordis
+pnpm pack 
+cd E:\harness\deepseek-harness
+dsh plugin --profile web add E:\harness\deep seek harness\your-plugin-0.1.0.tgz
+pnpm dsh --profile web								     #重启 dsh
 ```
 
-或用绝对路径 / `file:` 前缀：
 
-```sh
-dsh plugin --profile web add "C:\path\to\<插件名>-0.1.0.tgz"
-dsh plugin --profile web add file:./<插件名>-0.1.0.tgz
-```
 
-> ⚠ 不要写裸文件名（如 `add mycrd-2-0.1.0.tgz`）：`dsh plugin` 会在 profile 目录（`$DSH_HOME/profiles/web/`）里执行 pnpm，只有 `./`、`../` 开头的相对路径或绝对路径才会被锚定到你当前的目录；裸文件名会在 profile 目录里找文件，必然失败。
-
-### 仓库结构（git 安装前提）
+### 仓库结构
 
 ```
 <仓库根>/

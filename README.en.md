@@ -12,7 +12,7 @@ The Cordis **portable bundle** (`.dshplugin.json`) may currently be Windows-only
 
 ## Background
 
-Under dsh's "everything is a plugin" architecture, creation mode and plugin generation are convenient — but packaging plugins into [dsh install bundles] or keeping plugins running / restorable still causes friction. This tool is a small contribution to the community — and a token saver. Everyone is welcome to share content packaged with this plugin.
+Under dsh's "everything is a plugin" architecture, generation mode makes plugin creation more convenient — but packaging plugins into [dsh install bundles] or keeping plugins running / restorable still causes friction. This tool is a small contribution to the community — and a token saver. Everyone is welcome to share content packaged with this plugin.
 
 ## Features
 
@@ -20,7 +20,7 @@ Under dsh's "everything is a plugin" architecture, creation mode and plugin gene
 - **dsh bundle** (`.tgz`): a real install bundle synthesized with `pnpm pack`, installable via `dsh plugin add`; takes effect after restarting dsh
 - **Portable bundle** (`.dshplugin.json`): a host-only definition file; import it across sessions, or let an AI in a new session `read` it and rebuild via `cordis_define` (saves tokens)
 - Batch / single packing, with three pack types switchable on the fly
-- Install / uninstall dsh plugins (real, per-profile installs)
+- Install / uninstall dsh plugins (real, per-profile installs; a `.tgz` is actually a compressed archive of the complete files)
 - Import portable bundles (register only, not run)
 - Favorites (☆) / resident (★ auto-restored on restart) / restore (start) / copy cross-session locator info
 - Dedupe same-name plugins (merge versions by name)
@@ -30,46 +30,46 @@ Under dsh's "everything is a plugin" architecture, creation mode and plugin gene
 
 Repository: <https://github.com/LA7-F/dsh-MyCordis>
 
+Assume the dsh root directory is **A**: `E:\harness\deepseek-harness`
+
 ### Method 1 (recommended): install from git (real install; takes effect after restarting dsh)
 
 ```sh
-pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git
+pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git # recommended: run from root A
+pnpm dsh --profile web                                                          # restart dsh
 ```
 
 ### Method 2: clone first, then install (local install after git clone)
 
+The plugin is cloned into folder **B**: `E:\harness\dsh-MyCordis`
+
 ```sh
-git clone https://github.com/LA7-F/dsh-MyCordis.git
-cd dsh-MyCordis
-pnpm dsh plugin --profile web add .            # install the current directory as a local dependency
+git clone https://github.com/LA7-F/dsh-MyCordis.git         # run where you want folder B to live
+pnpm dsh plugin --profile web add E:\harness\dsh-MyCordis   # recommended: run from dsh root A
+pnpm dsh --profile web                                      # restart dsh
 ```
 
 Relative paths and pnpm's `file:` / `link:` forms are also supported:
 
 ```sh
-pnpm dsh plugin --profile web add ../dsh-MyCordis        # relative path (dsh anchors it to the current directory)
-pnpm dsh plugin --profile web add file:./dsh-MyCordis    # copy install
-pnpm dsh plugin --profile web add link:./dsh-MyCordis    # link install (source edits take effect immediately; good for development)
+pnpm dsh plugin --profile web add ..\dsh-MyCordis        # relative path (dsh anchors it to the current directory)
+pnpm dsh plugin --profile web add file:.\dsh-MyCordis    # copy install
+pnpm dsh plugin --profile web add link:.\dsh-MyCordis    # link install (source edits take effect immediately; good for development)
 ```
 
 ### Method 3: local dsh install bundle (.tgz)
 
-Run it from the directory containing the tarball (**the `./` prefix is required**):
+The plugin is cloned into folder **B**: `E:\harness\dsh-MyCordis`
 
 ```sh
-dsh plugin --profile web add ./<plugin-name>-0.1.0.tgz
+cd E:\harness\dsh-MyCordis
+pnpm pack
+cd E:\harness\deepseek-harness
+dsh plugin --profile web add E:\harness\deep seek harness\your-plugin-0.1.0.tgz
+pnpm dsh --profile web                                      # restart dsh
 ```
 
-Or use an absolute path / the `file:` prefix:
-
-```sh
-dsh plugin --profile web add "C:\path\to\<plugin-name>-0.1.0.tgz"
-dsh plugin --profile web add file:./<plugin-name>-0.1.0.tgz
-```
-
-> ⚠ Do not use a bare filename (e.g. `add mycrd-2-0.1.0.tgz`): `dsh plugin` runs pnpm inside the profile directory (`$DSH_HOME/profiles/web/`). Only `./`/`../`-prefixed relative paths or absolute paths are anchored to your current directory; a bare filename is looked up inside the profile directory and will fail.
-
-### Repository layout (prerequisite for git install)
+### Repository layout
 
 ```
 <repo root>/
