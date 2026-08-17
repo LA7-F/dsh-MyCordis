@@ -149,6 +149,31 @@ function normPath(p) {
 function sanitizeFilename(name) {
   return String(name || 'download').replace(/[\r\n]/g, '').replace(/[^\w.\-]/g, '_')
 }
+// ── 安全做法：导出前扫描插件代码中的疑似硬编码密钥，警示作者 ──
+function detectSecrets(code) {
+  const s = String(code || '')
+  const found = []
+  const patterns = [
+    ['sk-[A-Za-z0-9]{10,}', /sk-[A-Za-z0-9]{10,}/g],
+    ['api_key/apikey 赋值', /(?:api[_-]?key|apikey)\s*[:=]\s*['"][^'"]{8,}['"]/gi],
+    ['Bearer token', /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/gi],
+    ['password 赋值', /\bpassword\s*[:=]\s*['"][^'"]{4,}['"]/gi],
+    ['secret 赋值', /\bsecret\s*[:=]\s*['"][^'"]{8,}['"]/gi],
+    ['AKIA 开头(疑似AWS)', /\bAKIA[A-Z0-9]{16}\b/g],
+  ]
+  for (const [label, re] of patterns) {
+    const m = s.match(re)
+    if (m && m.length) found.push(label + ' x' + m.length)
+  }
+  return found
+}
+// ── 错误信息脱敏：剥盘符路径、截断超长命令片段 ──
+function safeErrorMsg(e) {
+  let m = String(e && e.message ? e.message : e)
+  m = m.replace(/[A-Za-z]:[\\/][^\s'";\n]*/g, '<路径>')
+  m = m.split('\n').map(function (l) { return l.length > 160 ? l.slice(0, 160) + '…' : l }).join('\n')
+  return m
+}
 function parsePath(reqUrl) {
   const raw = String(reqUrl || '/')
   const q = raw.indexOf('?')
@@ -379,7 +404,7 @@ ${head}
       log('step', '▸ 打包整包 ' + pluginId + '/' + packageId + '（dsh 安装包 + 便携包，一插件一子文件夹）…')
       fetch(API + '/pack-whole', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir + ' （' + r.tgzName + ' + ' + r.portableName + '）'); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir + ' （' + r.tgzName + ' + ' + r.portableName + '）'); if (r.ok && r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
@@ -387,7 +412,7 @@ ${head}
       log('step', '▸ 导出 ' + pluginId + ' 便携包…')
       fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); if (r.ok && r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
@@ -408,7 +433,7 @@ ${head}
       log('step', '▸ 一键打包整包 ' + checked.length + ' 个插件（dsh 安装包 + 便携包，每插件一个子文件夹）…')
       fetch(API + '/pack-whole', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir); if (r.ok && r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
@@ -416,7 +441,7 @@ ${head}
       log('step', '▸ 导出 ' + checked.length + ' 个便携包到放置目录…')
       fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); if (r.ok && r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
@@ -716,7 +741,7 @@ function listPlugins(ctx) {
     return { available: false, reason: 'dynamicCordisRunner 不可用（组合未挂载 cordis-host-runner）' }
   }
   let rows
-  try { rows = runner.inventory() ?? [] } catch (e) { return { available: false, reason: '枚举失败: ' + String(e && e.message ? e.message : e) } }
+  try { rows = runner.inventory() ?? [] } catch (e) { return { available: false, reason: '枚举失败: ' + safeErrorMsg(e) } }
   const plugins = rows.map(function (r) {
     const latest = r.latestRun
     return {
@@ -827,6 +852,8 @@ async function packSessionPlugin(ctx, payload) {
   const notes = []
   if (clientCode.trim() !== '') notes.push('client 半区为浏览器沙箱代码，不进入 Node bundle（已存档 client.js）')
   if (/(^|[^\w$.])harness\s*[.([]/.test(hostCode)) notes.push('host 半区引用沙箱全局 harness：安装为普通组合插件后运行时可能未定义')
+  const secretHits = detectSecrets(hostCode) + detectSecrets(clientCode)
+  if (secretHits.length) notes.push('⚠ 检测到疑似硬编码密钥：' + secretHits.join('、') + '（分享前请改为凭据引用）')
   const ws = await workspaceRoot(ctx)
   if (!ws) throw new Error('无法确定工作区根目录')
   const staging = ws.replace(/[\\/]+$/, '') + '/.packer2/staging-' + rand()
@@ -928,9 +955,10 @@ async function exportBatch(ctx, payload) {
       const artifact = outDir.replace(/[\\/]+$/, '') + '/' + data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const target = await fs.resolve(artifact)
       await fs.writeText(target, JSON.stringify(data, null, 2), undefined, undefined, policy)
-      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: true, path: artifact })
+      const warnings = detectSecrets((data.code && data.code.host) || '') + detectSecrets((data.code && data.code.client) || '')
+      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: true, path: artifact, warnings: warnings })
     } catch (e) {
-      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: false, message: String(e && e.message ? e.message : e) })
+      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: false, message: safeErrorMsg(e) })
     }
   }
   return { ok: true, results }
@@ -945,7 +973,7 @@ async function packBatch(ctx, payload) {
       const r = await packSessionPlugin(ctx, { pluginId: p.pluginId, packageId: p.packageId, outDir: outDirRaw })
       results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: true, artifactPath: r.artifactPath, sha256: r.sha256, sizeBytes: r.sizeBytes, notes: r.notes })
     } catch (e) {
-      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: false, message: String(e && e.message ? e.message : e) })
+      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: false, message: safeErrorMsg(e) })
     }
   }
   return { ok: true, results }
@@ -991,9 +1019,10 @@ async function packWhole(ctx, payload) {
         portablePath: artifact,
         portableName: portableName,
         notes: tgz.notes,
+        warnings: detectSecrets((data.code && data.code.host) || '') + detectSecrets((data.code && data.code.client) || ''),
       })
     } catch (e) {
-      results.push({ pluginId: String(p.pluginId || ''), packageId: String(p.packageId || ''), ok: false, message: String(e && e.message ? e.message : e) })
+      results.push({ pluginId: String(p.pluginId || ''), packageId: String(p.packageId || ''), ok: false, message: safeErrorMsg(e) })
     }
   }
   return { ok: true, outDir, results }
@@ -1212,7 +1241,7 @@ async function writeFavorites(ctx, obj) {
 }
 async function favoriteAdd(ctx, pluginId, packageId) {
   return favSerialize(async function () {
-    const data = exportDynamicPlugin(ctx, pluginId, packageId)
+    const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId))
     const obj = await readFavorites(ctx)
     const idx = obj.favorites.findIndex(function (f) { return f.pluginId === data.pluginId || (f.name && data.name && f.name === data.name) })
     if (idx >= 0) { data.resident = obj.favorites[idx].resident; obj.favorites[idx] = data }
@@ -1241,7 +1270,7 @@ async function favoriteRemove(ctx, pluginId) {
 async function favoriteSetResident(ctx, pluginId, packageId, resident) {
   return favSerialize(async function () {
     const obj = await readFavorites(ctx)
-    const data = exportDynamicPlugin(ctx, pluginId, packageId)
+    const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId))
     const idx = obj.favorites.findIndex(function (f) { return f.pluginId === data.pluginId || (f.name && data.name && f.name === data.name) })
     if (idx >= 0) {
       obj.favorites[idx] = data
@@ -1333,7 +1362,7 @@ async function snapshotPlugin(ctx, pluginId) {
   if (fs === undefined) throw new Error('fs 服务不可用')
   const target = await fs.resolve(artifact)
   await fs.writeText(target, JSON.stringify(data, null, 2))
-  return { ok: true, path: artifact, pluginId: data.pluginId, packageId: data.packageId, name: data.name }
+  return { ok: true, path: artifact, pluginId: data.pluginId, packageId: data.packageId, name: data.name, warnings: detectSecrets((data.code && data.code.host) || '') + detectSecrets((data.code && data.code.client) || '') }
 }
 async function handleRequest(ctx, req, res) {
   try {
@@ -1357,7 +1386,7 @@ async function handleRequest(ctx, req, res) {
     if (path === '/api/snapshot' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await snapshotPlugin(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await snapshotPlugin(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/export' && req.method === 'GET') {
@@ -1366,43 +1395,43 @@ async function handleRequest(ctx, req, res) {
       try {
         p.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
       } catch (e) { send(res, 400, { ok: false, message: '查询参数不是合法编码' }); return }
-      try { const data = sanitizePortable(exportDynamicPlugin(ctx, qs.pluginId, qs.packageId)); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { const data = sanitizePortable(exportDynamicPlugin(ctx, qs.pluginId, qs.packageId)); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/export-batch' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await exportBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await exportBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/pack-batch' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await packBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await packBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/pack-whole' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await packWhole(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await packWhole(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/import' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await importDynamicPlugin(ctx, body, body === undefined || body.run !== false)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await importDynamicPlugin(ctx, body, body === undefined || body.run !== false)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/install' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await installBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await installBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/upload' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await uploadBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await uploadBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/installed' && req.method === 'GET') {
@@ -1411,21 +1440,21 @@ async function handleRequest(ctx, req, res) {
         u.query.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
       } catch (e) { send(res, 400, { ok: false, message: '查询参数不是合法编码' }); return }
       const profile = String(qs.profile || 'web')
-      try { send(res, 200, await installedPlugins(ctx, profile)) } catch (e) { send(res, 200, { profile, error: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await installedPlugins(ctx, profile)) } catch (e) { send(res, 200, { profile, error: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/uninstall' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await uninstallBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await uninstallBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/dedupe' && req.method === 'POST') {
-      try { send(res, 200, await dedupePlugins(ctx)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await dedupePlugins(ctx)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/favorites' && req.method === 'GET') {
-      try { send(res, 200, { ok: true, favorites: (await readFavorites(ctx)).favorites.map(function (f) { return { pluginId: f.pluginId, packageId: f.packageId, name: f.name, resident: f.resident === true } }) }) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, { ok: true, favorites: (await readFavorites(ctx)).favorites.map(function (f) { return { pluginId: f.pluginId, packageId: f.packageId, name: f.name, resident: f.resident === true } }) }) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/favorite' && req.method === 'POST') {
@@ -1435,17 +1464,17 @@ async function handleRequest(ctx, req, res) {
         if (body && body.action === 'remove') send(res, 200, await favoriteRemove(ctx, String(body.pluginId || '')))
         else if (body && body.action === 'resident') send(res, 200, await favoriteSetResident(ctx, String(body.pluginId || ''), String(body.packageId || ''), body.resident === true))
         else send(res, 200, await favoriteAdd(ctx, String(body.pluginId || ''), String(body.packageId || '')))
-      } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/restore-one' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await restoreOne(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await restoreOne(ctx, String(body && body.pluginId || ''))) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/restore-favorites' && req.method === 'POST') {
-      try { send(res, 200, await restoreFavorites(ctx)) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await restoreFavorites(ctx)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/browse' && req.method === 'GET') {
@@ -1456,7 +1485,7 @@ async function handleRequest(ctx, req, res) {
       if (cap.kind === 'browse') {
         let target
         try { target = u.query.startsWith('path=') ? decodeURIComponent(u.query.slice(5)) : undefined } catch (e) { target = undefined }
-        try { const listing = await cap.list(target === '' ? undefined : target); send(res, 200, { kind: 'browse', ...listing }); return } catch (e) { send(res, 200, { kind: 'browse', error: String(e && e.message ? e.message : e) }); return }
+        try { const listing = await cap.list(target === '' ? undefined : target); send(res, 200, { kind: 'browse', ...listing }); return } catch (e) { send(res, 200, { kind: 'browse', error: safeErrorMsg(e) }); return }
       }
       send(res, 200, { kind: 'none', reason: '未知 directoryPicker 后端: ' + cap.kind })
       return
@@ -1472,7 +1501,7 @@ async function handleRequest(ctx, req, res) {
         send(res, 200, { picked: null, error: '原生目录选择不可用' })
         return
       }
-      try { const picked = await pickDirNative(ctx, body && body.start); send(res, 200, { picked }) } catch (e) { send(res, 200, { picked: null, error: String(e && e.message ? e.message : e) }) }
+      try { const picked = await pickDirNative(ctx, body && body.start); send(res, 200, { picked }) } catch (e) { send(res, 200, { picked: null, error: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/browse/create' && req.method === 'POST') {
@@ -1482,19 +1511,19 @@ async function handleRequest(ctx, req, res) {
       if (svc === undefined || typeof svc.capability !== 'function') { send(res, 200, { ok: false, message: 'directoryPicker 服务不可用' }); return }
       const cap = svc.capability()
       if (cap.kind !== 'browse') { send(res, 200, { ok: false, message: '当前后端不支持新建目录' }); return }
-      try { const created = await cap.createDirectory(String((body && body.path) || ''), String((body && body.name) || '')); send(res, 200, { ok: true, created }); return } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }); return }
+      try { const created = await cap.createDirectory(String((body && body.path) || ''), String((body && body.name) || '')); send(res, 200, { ok: true, created }); return } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }); return }
     }
     if (path === '/api/pack' && req.method === 'POST') {
       let payload
       try { payload = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await packSessionPlugin(ctx, payload || {})) } catch (e) { send(res, 200, { ok: false, message: String(e && e.message ? e.message : e) }) }
+      try { send(res, 200, await packSessionPlugin(ctx, payload || {})) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     send(res, 404, { message: 'not found: ' + path })
   } catch (error) {
     const msg = String(error && error.message ? error.message : error)
     const status = msg === 'body-too-large' ? 413 : 500
-    try { send(res, status, { ok: false, message: msg === 'body-too-large' ? '请求体过大' : msg }) } catch (e) { res.destroy() }
+    try { send(res, status, { ok: false, message: msg === 'body-too-large' ? '请求体过大' : safeErrorMsg(msg) }) } catch (e) { res.destroy() }
   }
 }
 return {
