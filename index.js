@@ -1,5 +1,5 @@
 /**
- * dsh-mycordis — 由 我的Cordis 从会话级动态插件合成。
+ * mycrd-7 — 由 我的Cordis 从会话级动态插件合成。
  * host 半区以 async 函数体求值；client 半区（浏览器沙箱代码）仅存档不运行。
  */
 import { readFileSync } from 'node:fs'

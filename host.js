@@ -45,7 +45,7 @@ async function resolveCurrentSessionId(ctx) {
       }
       if (typeof agents.roots === 'function') {
         const roots = agents.roots()
-        if (roots && roots.length > 0) return String(roots[0].id || '')
+        if (roots && roots.length === 1) return String(roots[0].id || '')
       }
     }
   } catch (e) { /* 保持空 */ }
@@ -149,25 +149,7 @@ function normPath(p) {
 function sanitizeFilename(name) {
   return String(name || 'download').replace(/[\r\n]/g, '').replace(/[^\w.\-]/g, '_')
 }
-// ── 安全做法：导出前扫描插件代码中的疑似硬编码密钥，警示作者 ──
-function detectSecrets(code) {
-  const s = String(code || '')
-  const found = []
-  const patterns = [
-    ['sk-[A-Za-z0-9]{10,}', /sk-[A-Za-z0-9]{10,}/g],
-    ['api_key/apikey 赋值', /(?:api[_-]?key|apikey)\s*[:=]\s*['"][^'"]{8,}['"]/gi],
-    ['Bearer token', /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/gi],
-    ['password 赋值', /\bpassword\s*[:=]\s*['"][^'"]{4,}['"]/gi],
-    ['secret 赋值', /\bsecret\s*[:=]\s*['"][^'"]{8,}['"]/gi],
-    ['AKIA 开头(疑似AWS)', /\bAKIA[A-Z0-9]{16}\b/g],
-  ]
-  for (const [label, re] of patterns) {
-    const m = s.match(re)
-    if (m && m.length) found.push(label + ' x' + m.length)
-  }
-  return found
-}
-// ── 错误信息脱敏：剥盘符路径、截断超长命令片段 ──
+// ── 错误信息脱敏：剥掉绝对路径与超长命令片段 ──
 function safeErrorMsg(e) {
   let m = String(e && e.message ? e.message : e)
   m = m.replace(/[A-Za-z]:[\\/][^\s'";\n]*/g, '<路径>')
@@ -213,15 +195,9 @@ function entrySource(pkgName) {
   ].join('\n')
 }
 function injectButton(html) {
-  if (typeof html !== 'string') return html
-  // 版本标记：新版脚本已注入 → 幂等返回。早期版本无此标记，靠 dsh-plugin-builder2-entry 识别旧块
-  if (html.includes('packer2-script-v23')) return html
-  // 剥离旧版注入脚本块（无面板自动展开的早期版本），避免粘性占位阻止新版生效。
-  // 新版块内含 'var P2V = ...' 行，不会命中本正则（'use strict' 与 var ID 之间隔了一行），故绝不自删。
-  html = html.replace(/<script>\s*\(function \(\) \{\s*'use strict'\s*var ID = 'dsh-plugin-builder2-entry'[\s\S]*?<\/script>/g, '')
+  if (typeof html !== 'string' || html.includes('dsh-plugin-builder2-entry')) return html
   const script = `(function () {
   'use strict'
-  var P2V = 'packer2-script-v23'
   var ID = 'dsh-plugin-builder2-entry'
   var PANEL_ID = 'dsh-plugin-builder2-panel'
   var panel = null
@@ -282,19 +258,7 @@ function injectButton(html) {
   }
   document.addEventListener('click', function (ev) { if (!panel) return; if (panel.contains(ev.target)) return; var b = document.getElementById(ID); if (b && b.contains(ev.target)) return; closePanel() })
   document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closePanel() })
-  // 每次页面加载自动展开 Cordis 面板（sidebar 底部 Run 卡面板，按钮带稳定 data-cordis-badge 属性）
-  function autoOpenCordisPanel() {
-    var tries = 0
-    var timer = setInterval(function () {
-      tries += 1
-      var b = document.querySelector('[data-cordis-badge]')
-      if (b) {
-        clearInterval(timer)
-        if (b.getAttribute('aria-expanded') !== 'true') { try { b.click() } catch (e) {} }
-      } else if (tries > 8) { clearInterval(timer) }
-    }, 700)
-  }
-  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function () { setInterval(mount, 1000); autoOpenCordisPanel() }) } else { setInterval(mount, 1000); autoOpenCordisPanel() }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function () { setInterval(mount, 1000) }) } else { setInterval(mount, 1000) }
 })()`
   return html.replace('</body>', '<script>' + script + '</script>\n</body>')
 }
@@ -361,7 +325,7 @@ ${head}
   <label>放置目录（打包产物输出目录）</label>
   <div class="row"><input id="outDir" type="text" spellcheck="false"><button id="browse" class="btn">浏览…</button><button id="refresh" class="btn">刷新列表</button></div>
   <label>打包类型（勾选插件后一键打包，或点每行「打包」单打）</label>
-  <div class="row"><select id="ptype"><option value="dsh">dsh 包（.tgz，真实安装）</option><option value="portable">便携包（含 client UI）</option><option value="whole">整包（dsh 安装包 + 便携包）</option></select><label style="margin:0;display:flex;align-items:center;gap:4px;height:32px;white-space:nowrap;flex-shrink:0"><input type="checkbox" id="all">全选</label><button id="batch" class="btn primary">一键打包</button></div>
+  <div class="row"><select id="ptype"><option value="dsh">dsh 包（.tgz，真实安装）</option><option value="portable">便携包（纯 host，无 client UI）</option><option value="whole">整包（dsh 安装包 + 便携包）</option></select><label style="margin:0;display:flex;align-items:center;gap:4px;height:32px;white-space:nowrap;flex-shrink:0"><input type="checkbox" id="all">全选</label><button id="batch" class="btn primary">一键打包</button></div>
   <span id="hint" class="hint"></span>
   <div class="grid head"><span></span><span>插件名</span><span>插件ID</span><span>版本</span><span>操作</span></div>
   <ul id="list"></ul>
@@ -371,7 +335,7 @@ ${head}
   <div class="desc">选择 .tgz 文件，自动上传并安装（等价于 dsh plugin add），需批准提升权限</div>
   <div class="row"><input id="iprofile" type="text" value="web" placeholder="profile（默认 web）"><input id="ifile" type="file" accept=".tgz,.dshplugin,application/gzip" style="display:none"><button id="ibtn" class="btn">安装 dsh 包</button></div>
   <div class="section">② 安装 Cordis 插件（临时，非真实安装）</div>
-  <div class="desc">⚠ 导入会在 dsh 进程内执行包内代码，请只导入可信来源的便携包（.dshplugin.json，含 host 与 client UI）；导入后自动激活运行，无需手动「恢复」。</div>
+  <div class="desc">⚠ 导入会在 dsh 进程内执行包内代码，请只导入可信来源的便携包（.dshplugin.json，纯 host，一个插件一个文件）；导入后仅注册不运行，点「恢复」才启动。</div>
   <div class="row"><input id="xsess" type="text" placeholder="所属会话 id（可空）"><input id="xfile" type="file" accept=".json" style="display:none"><button id="xbtn" class="btn">导入便携包</button></div>
 </div>
 <div id="viewMgmt" style="display:none">
@@ -422,15 +386,15 @@ ${head}
       log('step', '▸ 打包整包 ' + pluginId + '/' + packageId + '（dsh 安装包 + 便携包，一插件一子文件夹）…')
       fetch(API + '/pack-whole', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) { log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir + ' （' + r.tgzName + ' + ' + r.portableName + '）'); if (r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')) } else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir + ' （' + r.tgzName + ' + ' + r.portableName + '）'); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
     if (type === 'portable') {
-      log('step', '▸ 导出 ' + pluginId + ' 便携包…')
+      log('step', '▸ 导出 ' + pluginId + ' 便携包（纯 host）…')
       fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: [{ pluginId: pluginId, packageId: packageId }], outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) { log('ok', '✔ ' + r.pluginId + ' → ' + r.path); if (r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')) } else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
@@ -451,15 +415,15 @@ ${head}
       log('step', '▸ 一键打包整包 ' + checked.length + ' 个插件（dsh 安装包 + 便携包，每插件一个子文件夹）…')
       fetch(API + '/pack-whole', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) { log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir); if (r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')) } else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + '/' + r.packageId + ' → ' + r.dir); else log('err', '✘ ' + r.pluginId + '/' + r.packageId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
     if (type === 'portable') {
-      log('step', '▸ 导出 ' + checked.length + ' 个便携包到放置目录…')
+      log('step', '▸ 导出 ' + checked.length + ' 个便携包（纯 host）到放置目录…')
       fetch(API + '/export-batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ plugins: checked, outDir: outDir }) })
         .then(function (r) { return r.json() }).then(function (d) {
-          ;(d.results || []).forEach(function (r) { if (r.ok) { log('ok', '✔ ' + r.pluginId + ' → ' + r.path); if (r.warnings && r.warnings.length) log('warn', '⚠ ' + r.pluginId + ' 检测到疑似硬编码密钥：' + r.warnings.join('、')) } else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
+          ;(d.results || []).forEach(function (r) { if (r.ok) log('ok', '✔ ' + r.pluginId + ' → ' + r.path); else log('err', '✘ ' + r.pluginId + '：' + (r.message || '失败')) })
         }).catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
       return
     }
@@ -566,9 +530,9 @@ ${head}
     rd.onload = function () {
       var data; try { data = JSON.parse(rd.result) } catch (e) { log('err','✘ JSON 解析失败: '+e.message); return }
       if (!data || (data.__dshDynamicPlugin !== true && data.__dshDynamicPlugins !== true)) { log('err','✘ 不是便携动态插件包'); return }
-      $('log').textContent=''; log('step','▸ 导入并自动激活为 Cordis 插件…')
-      fetch(API+'/import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId:$('xsess').value.trim()||'',data:data,run:true})}).then(function(r){return r.json()}).then(function(d){
-        if (d.ok && d.results) { d.results.forEach(function(r){log('ok','✔ 已导入并激活 '+r.pluginId+'/'+r.packageId+'（'+r.name+'）')}); load() }
+      $('log').textContent=''; log('step','▸ 导入并注册为 Cordis 插件（不运行）…')
+      fetch(API+'/import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId:$('xsess').value.trim()||'',data:data})}).then(function(r){return r.json()}).then(function(d){
+        if (d.ok && d.results) { d.results.forEach(function(r){log('ok','✔ 已注册（未运行）'+r.pluginId+'/'+r.packageId+'（'+r.name+'）')}); load() }
         else log('err','✘ '+(d.message||JSON.stringify(d)))
       }).catch(function(e){log('err','✘ 请求失败: '+e.message)})
     }
@@ -870,8 +834,6 @@ async function packSessionPlugin(ctx, payload) {
   const notes = []
   if (clientCode.trim() !== '') notes.push('client 半区为浏览器沙箱代码，不进入 Node bundle（已存档 client.js）')
   if (/(^|[^\w$.])harness\s*[.([]/.test(hostCode)) notes.push('host 半区引用沙箱全局 harness：安装为普通组合插件后运行时可能未定义')
-  const secretHits = detectSecrets(hostCode) + detectSecrets(clientCode)
-  if (secretHits.length) notes.push('⚠ 检测到疑似硬编码密钥：' + secretHits.join('、') + '（分享前请改为凭据引用）')
   const ws = await workspaceRoot(ctx)
   if (!ws) throw new Error('无法确定工作区根目录')
   const staging = ws.replace(/[\\/]+$/, '') + '/.packer2/staging-' + rand()
@@ -969,14 +931,11 @@ async function exportBatch(ctx, payload) {
   const results = []
   for (const p of plugins) {
     try {
-      const raw = exportDynamicPlugin(ctx, p.pluginId, p.packageId)
-      const data = sanitizePortable(raw)
-      if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
+      const data = sanitizePortable(exportDynamicPlugin(ctx, p.pluginId, p.packageId, true))
       const artifact = outDir.replace(/[\\/]+$/, '') + '/' + data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const target = await fs.resolve(artifact)
       await fs.writeText(target, JSON.stringify(data, null, 2), undefined, undefined, policy)
-      const warnings = detectSecrets((data.code && data.code.host) || '') + detectSecrets((data.code && data.code.client) || '')
-      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: true, path: artifact, warnings: warnings })
+      results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: true, path: artifact })
     } catch (e) {
       results.push({ pluginId: p.pluginId, packageId: p.packageId, ok: false, message: safeErrorMsg(e) })
     }
@@ -1022,9 +981,7 @@ async function packWhole(ctx, payload) {
       const subDir = outDir.replace(/[\\/]+$/, '') + '/' + pluginId + (packageId === '' ? '' : '-' + packageId)
       await runShell(ctx, 'New-Item -ItemType Directory -Force -Path ' + sq(subDir), undefined, policy)
       const tgz = await packSessionPlugin(ctx, { pluginId: pluginId, packageId: packageId, outDir: subDir })
-      const raw = exportDynamicPlugin(ctx, pluginId, packageId)
-      const data = sanitizePortable(raw)
-      if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
+      const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId, true))
       const portableName = data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const artifact = subDir.replace(/[\\/]+$/, '') + '/' + portableName
       const target = await fs.resolve(artifact)
@@ -1041,7 +998,6 @@ async function packWhole(ctx, payload) {
         portablePath: artifact,
         portableName: portableName,
         notes: tgz.notes,
-        warnings: detectSecrets((data.code && data.code.host) || '') + detectSecrets((data.code && data.code.client) || ''),
       })
     } catch (e) {
       results.push({ pluginId: String(p.pluginId || ''), packageId: String(p.packageId || ''), ok: false, message: safeErrorMsg(e) })
@@ -1058,14 +1014,6 @@ async function importDynamicPlugin(ctx, payload, runIt) {
   else if (data && data.__dshDynamicPlugin === true) items = [data]
   else throw new Error('不是便携动态插件包')
   let sessionId = String((payload && payload.sessionId) || (items.length ? items[0].ownerSessionId : '') || '')
-  // 隐私缓存还原：便携包只有假 id，本机缓存 packer2-sessions.json 记录 pluginId→真实会话 id；
-  // 导入/恢复时按 pluginId 查缓存拿到真 id 直接运行（跨机器/无缓存时才走下方 harness 兜底）。
-  if (isFakeSessionId(sessionId) && items.length > 0 && items[0].pluginId) {
-    try {
-      const cached = await realSessionFor(ctx, String(items[0].pluginId))
-      if (cached !== '') sessionId = cached
-    } catch (e) { /* 保持原值 */ }
-  }
   if (isFakeSessionId(sessionId)) sessionId = await resolveCurrentSessionId(ctx)
   if (sessionId === '') {
     // 兜底：取当前进程任一已存在会话（与自动恢复一致）
@@ -1074,19 +1022,7 @@ async function importDynamicPlugin(ctx, payload, runIt) {
       for (const r of rows) { if (r && r.agentId) { sessionId = String(r.agentId); break } }
     } catch (e) { /* 保持空 */ }
   }
-  if (sessionId === '') {
-    // 隐私要求：导出文件不保留真实会话 id。解析不到当前/已有会话时（全新机器/空进程），
-    // 必须回落到一个【真实存在的会话】——runner 运行时要求会话真实存在（假 ID 会报 session-not-found）。
-    // dsh 必然有 root agent，取 roots[0]；真没有任何会话才报错。
-    try {
-      const agents = ctx.get('agents')
-      if (agents !== undefined && typeof agents.roots === 'function') {
-        const roots = agents.roots()
-        if (roots && roots.length > 0) sessionId = String(roots[0].id || '')
-      }
-    } catch (e) { /* 保持空 */ }
-  }
-  if (sessionId === '' || isFakeSessionId(sessionId)) throw new Error('导入需要所属会话 id（无法解析任何真实会话）')
+  if (sessionId === '') throw new Error('导入需要所属会话 id（sessionId）')
   const results = []
   for (const item of items) {
     if (!item || item.__dshDynamicPlugin !== true) continue
@@ -1096,8 +1032,6 @@ async function importDynamicPlugin(ctx, payload, runIt) {
     if (item.code && typeof item.code.host === 'string') code.host = item.code.host
     if (item.code && typeof item.code.client === 'string') code.client = item.code.client
     if (code.host === undefined && code.client === undefined) continue
-    // 导入自动激活：host 与 client 半区插件都直接运行（client UI 由动态沙箱提供 React/host/styles，良性插件如计费挂件无副作用）
-    const willRun = runIt !== false
     let targetPluginId = null
     let targetSessionId = ''
     let targetCurrentId = ''
@@ -1122,7 +1056,7 @@ async function importDynamicPlugin(ctx, payload, runIt) {
           const curHost = (inspected && inspected.code && inspected.code.host) || ''
           const newHost = (item.code && item.code.host) || ''
           if (curHost === newHost) {
-            if (willRun) {
+            if (runIt !== false) {
               try { await runner.run({ id: useSessionId }, targetPluginId, targetCurrentId, 'run', undefined) } catch (e) { /* 运行可选 */ }
             }
             results.push({ pluginId: targetPluginId, packageId: targetCurrentId, name })
@@ -1131,7 +1065,7 @@ async function importDynamicPlugin(ctx, payload, runIt) {
         } catch (e) { /* 比较失败，走追加新版本 */ }
       }
       receipt = runner.define({ sessionId: useSessionId, plugin: { kind: 'existing', pluginId: targetPluginId }, name, purpose, code })
-      if (willRun) {
+      if (runIt !== false) {
         try {
           const mode = targetCurrentId !== '' ? 'update' : 'run'
           await runner.run({ id: useSessionId }, receipt.pluginId, receipt.packageId, mode, undefined)
@@ -1139,13 +1073,11 @@ async function importDynamicPlugin(ctx, payload, runIt) {
       }
     } else {
       receipt = runner.define({ sessionId: useSessionId, plugin: { kind: 'new', idPrefix: prefix }, name, purpose, code })
-      if (willRun) {
+      if (runIt !== false) {
         try { await runner.run({ id: useSessionId }, receipt.pluginId, receipt.packageId, 'run', undefined) } catch (e) { /* 运行可选 */ }
       }
     }
     results.push({ pluginId: String(receipt.pluginId), packageId: String(receipt.packageId), name })
-    // 导入/恢复成功后，把「便携包 pluginId → 真实会话 id」记入本地缓存，供下次直接还原
-    try { await rememberRealSession(ctx, String(receipt.pluginId), useSessionId) } catch (e) { /* 静默 */ }
   }
   return { ok: true, results }
 }
@@ -1262,43 +1194,6 @@ async function favoritesPath(ctx) {
   const ws = await workspaceRoot(ctx)
   return ws.replace(/[\\/]+$/, '') + '/packer2-favorites.json'
 }
-// ── 真实会话 id 缓存（隐私设计）：真 id 只写进本地缓存文件 packer2-sessions.json，
-//    该文件不进便携包、不参与打包、建议加入 .gitignore。便携包/收藏导出始终只有假 id，
-//    导入/恢复时先查缓存还原真 id 直接运行，查不到才走 harness 兜底解析。 ──
-async function sessionsCachePath(ctx) {
-  const ws = await workspaceRoot(ctx)
-  return ws.replace(/[\\/]+$/, '') + '/packer2-sessions.json'
-}
-async function readSessionsCache(ctx) {
-  const fs = ctx.get('fs')
-  if (fs === undefined) return {}
-  try {
-    const t = await fs.resolve(await sessionsCachePath(ctx))
-    const obj = JSON.parse(await fs.readText(t))
-    return (obj && typeof obj === 'object' && obj.sessions && typeof obj.sessions === 'object') ? obj.sessions : {}
-  } catch (e) { return {} }
-}
-async function writeSessionsCache(ctx, sessions) {
-  const fs = ctx.get('fs')
-  if (fs === undefined) return
-  const t = await fs.resolve(await sessionsCachePath(ctx))
-  await fs.writeText(t, JSON.stringify({ sessions: sessions, note: '本地会话 id 缓存：仅供本机导入/恢复还原用；永不写入便携包，建议加入 .gitignore' }, null, 2))
-}
-async function rememberRealSession(ctx, pluginId, realSessionId) {
-  if (!pluginId || !realSessionId || isFakeSessionId(realSessionId)) return
-  return favSerialize(async function () {
-    const sessions = await readSessionsCache(ctx)
-    sessions[String(pluginId)] = String(realSessionId)
-    await writeSessionsCache(ctx, sessions)
-  })
-}
-async function realSessionFor(ctx, pluginId) {
-  try {
-    const sessions = await readSessionsCache(ctx)
-    const sid = sessions[String(pluginId)]
-    return (sid && !isFakeSessionId(sid)) ? String(sid) : ''
-  } catch (e) { return '' }
-}
 async function readFavorites(ctx) {
   const fs = ctx.get('fs')
   if (fs === undefined) return { favorites: [] }
@@ -1317,9 +1212,7 @@ async function writeFavorites(ctx, obj) {
 }
 async function favoriteAdd(ctx, pluginId, packageId) {
   return favSerialize(async function () {
-    const raw = exportDynamicPlugin(ctx, pluginId, packageId)
-    const data = sanitizePortable(raw)
-    if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
+    const data = exportDynamicPlugin(ctx, pluginId, packageId)
     const obj = await readFavorites(ctx)
     const idx = obj.favorites.findIndex(function (f) { return f.pluginId === data.pluginId || (f.name && data.name && f.name === data.name) })
     if (idx >= 0) { data.resident = obj.favorites[idx].resident; obj.favorites[idx] = data }
@@ -1348,9 +1241,7 @@ async function favoriteRemove(ctx, pluginId) {
 async function favoriteSetResident(ctx, pluginId, packageId, resident) {
   return favSerialize(async function () {
     const obj = await readFavorites(ctx)
-    const raw = exportDynamicPlugin(ctx, pluginId, packageId)
-    const data = sanitizePortable(raw)
-    if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
+    const data = exportDynamicPlugin(ctx, pluginId, packageId)
     const idx = obj.favorites.findIndex(function (f) { return f.pluginId === data.pluginId || (f.name && data.name && f.name === data.name) })
     if (idx >= 0) {
       obj.favorites[idx] = data
@@ -1424,27 +1315,15 @@ async function autoRestoreResident(ctx) {
     const agents = ctx.get('agents')
     if (agents) {
       if (typeof agents.currentInitiator === 'function') { const i = agents.currentInitiator(); if (i && i.id) currentSid = String(i.id) }
-      if (currentSid === '' && typeof agents.roots === 'function') { const roots = agents.roots(); if (roots && roots.length > 0) currentSid = String(roots[0].id || '') }
+      if (currentSid === '' && typeof agents.roots === 'function') { const roots = agents.roots(); if (roots && roots.length === 1) currentSid = String(roots[0].id || '') }
     }
   } catch (e) { /* 保持空 */ }
-  // 会话必须真实存在：优先从本地缓存还原（pluginId→真实会话 id），查不到再取当前会话/任一已存在会话/首个 root
-  let sessionId = currentSid || sid || ''
-  if (sessionId === '' || isFakeSessionId(sessionId)) {
-    try {
-      for (const it of todo) {
-        if (!it || !it.pluginId) continue
-        const cached = await realSessionFor(ctx, String(it.pluginId))
-        if (cached !== '') { sessionId = cached; break }
-      }
-    } catch (e) { /* 保持原值 */ }
-  }
-  if (sessionId === '' || isFakeSessionId(sessionId)) return
+  const sessionId = currentSid || String((todo[0] && todo[0].ownerSessionId) || '') || sid
+  if (sessionId === '') return
   try { await importDynamicPlugin(ctx, { data: { __dshDynamicPlugins: true, plugins: todo }, sessionId: sessionId }, true) } catch (e) { /* 静默 */ }
 }
 async function snapshotPlugin(ctx, pluginId) {
-  const raw = exportDynamicPlugin(ctx, pluginId, '')
-  const data = sanitizePortable(raw)
-  if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId)
+  const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, ''))
   const ws = await workspaceRoot(ctx)
   if (!ws) throw new Error('无法确定工作区根目录')
   const dir = ws.replace(/[\\/]+$/, '') + '/packer2-snapshot'
@@ -1454,7 +1333,7 @@ async function snapshotPlugin(ctx, pluginId) {
   if (fs === undefined) throw new Error('fs 服务不可用')
   const target = await fs.resolve(artifact)
   await fs.writeText(target, JSON.stringify(data, null, 2))
-  return { ok: true, path: artifact, pluginId: data.pluginId, packageId: data.packageId, name: data.name, warnings: detectSecrets((data.code && data.code.host) || '') + detectSecrets((data.code && data.code.client) || '') }
+  return { ok: true, path: artifact, pluginId: data.pluginId, packageId: data.packageId, name: data.name }
 }
 async function handleRequest(ctx, req, res) {
   try {
@@ -1487,7 +1366,7 @@ async function handleRequest(ctx, req, res) {
       try {
         p.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
       } catch (e) { send(res, 400, { ok: false, message: '查询参数不是合法编码' }); return }
-      try { const raw = exportDynamicPlugin(ctx, qs.pluginId, qs.packageId); const data = sanitizePortable(raw); if (raw && raw.ownerSessionId && !isFakeSessionId(raw.ownerSessionId)) await rememberRealSession(ctx, data.pluginId, raw.ownerSessionId); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
+      try { const data = sanitizePortable(exportDynamicPlugin(ctx, qs.pluginId, qs.packageId)); sendDownload(res, data.pluginId + '-' + data.packageId + '.dshplugin.json', data) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/export-batch' && req.method === 'POST') {
@@ -1511,7 +1390,7 @@ async function handleRequest(ctx, req, res) {
     if (path === '/api/import' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
-      try { send(res, 200, await importDynamicPlugin(ctx, body, body === undefined || body.run !== false)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
+      try { send(res, 200, await importDynamicPlugin(ctx, body, false)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/install' && req.method === 'POST') {
@@ -1577,6 +1456,12 @@ async function handleRequest(ctx, req, res) {
       if (cap.kind === 'browse') {
         let target
         try { target = u.query.startsWith('path=') ? decodeURIComponent(u.query.slice(5)) : undefined } catch (e) { target = undefined }
+        if (target !== undefined && target !== '') {
+          const ws = (await workspaceRoot(ctx)) || ''
+          const tNorm = normPath(String(target)).toLowerCase()
+          const wNorm = normPath(ws).toLowerCase()
+          if (tNorm !== wNorm && !tNorm.startsWith(wNorm + '/')) { send(res, 200, { kind: 'browse', error: '路径超出工作区范围' }); return }
+        }
         try { const listing = await cap.list(target === '' ? undefined : target); send(res, 200, { kind: 'browse', ...listing }); return } catch (e) { send(res, 200, { kind: 'browse', error: safeErrorMsg(e) }); return }
       }
       send(res, 200, { kind: 'none', reason: '未知 directoryPicker 后端: ' + cap.kind })
@@ -1603,7 +1488,14 @@ async function handleRequest(ctx, req, res) {
       if (svc === undefined || typeof svc.capability !== 'function') { send(res, 200, { ok: false, message: 'directoryPicker 服务不可用' }); return }
       const cap = svc.capability()
       if (cap.kind !== 'browse') { send(res, 200, { ok: false, message: '当前后端不支持新建目录' }); return }
-      try { const created = await cap.createDirectory(String((body && body.path) || ''), String((body && body.name) || '')); send(res, 200, { ok: true, created }); return } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }); return }
+      try {
+        const base = String((body && body.path) || '')
+        const ws = (await workspaceRoot(ctx)) || ''
+        const bNorm = normPath(base).toLowerCase()
+        const wNorm = normPath(ws).toLowerCase()
+        if (bNorm !== wNorm && !bNorm.startsWith(wNorm + '/')) { send(res, 200, { ok: false, message: '路径超出工作区范围' }); return }
+        const created = await cap.createDirectory(base, String((body && body.name) || '')); send(res, 200, { ok: true, created }); return
+      } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }); return }
     }
     if (path === '/api/pack' && req.method === 'POST') {
       let payload

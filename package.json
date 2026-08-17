@@ -1,8 +1,7 @@
 {
-  "name": "dsh-mycordis",
-  "version": "0.1.2",
-  "license": "MIT",
-  "description": "我的Cordis：DeepSeek Harness 会话级动态插件的打包 / 安装 / 便携化 / 管理工具（含「打包整包」：dsh 安装包 + 便携包 一键同出）",
+  "name": "mycrd-7",
+  "version": "0.1.0",
+  "description": "我的Cordis 安全加固 v5（pkg-9）：补全第二轮复测发现的 3 处兜底 catch 错误脱敏（/api/browse/pick、/api/installed 外层、listPlugins 枚举失败），所有错误输出统一走 safeErrorMsg。其余与 pkg-8 相同（最终安全版）：信任栅栏 v2 / profile 白名单 / 无 agentId / 畸形编码 400 / browse 工作区限制 / readBody 流式解码 / 80MB / 文件名净化 / 导出假 ID 脱敏 / 导入兜底 / 打包整包。",
   "type": "module",
   "main": "index.js",
   "files": [
