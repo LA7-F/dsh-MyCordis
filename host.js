@@ -213,9 +213,15 @@ function entrySource(pkgName) {
   ].join('\n')
 }
 function injectButton(html) {
-  if (typeof html !== 'string' || html.includes('dsh-plugin-builder2-entry')) return html
+  if (typeof html !== 'string') return html
+  // 版本标记：新版脚本已注入 → 幂等返回。早期版本无此标记，靠 dsh-plugin-builder2-entry 识别旧块
+  if (html.includes('packer2-script-v23')) return html
+  // 剥离旧版注入脚本块（无面板自动展开的早期版本），避免粘性占位阻止新版生效。
+  // 新版块内含 'var P2V = ...' 行，不会命中本正则（'use strict' 与 var ID 之间隔了一行），故绝不自删。
+  html = html.replace(/<script>\s*\(function \(\) \{\s*'use strict'\s*var ID = 'dsh-plugin-builder2-entry'[\s\S]*?<\/script>/g, '')
   const script = `(function () {
   'use strict'
+  var P2V = 'packer2-script-v23'
   var ID = 'dsh-plugin-builder2-entry'
   var PANEL_ID = 'dsh-plugin-builder2-panel'
   var panel = null
