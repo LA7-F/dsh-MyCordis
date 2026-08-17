@@ -2,6 +2,8 @@
 
 [English](README.en.md) | 中文
 
+[![npm](https://img.shields.io/npm/v/dsh-mycordis.svg)](https://www.npmjs.com/package/dsh-mycordis)
+
 我的Cordis 本身就是 dsh「**一切皆插件**」架构的一个实例：它作为会话级动态插件加载，将自身打包并安装自身实现验证，同时进行了其他demo插件测试
 
 复用 Harness 的 `webServer` / `dynamicCordisRunner` / `fs` / `shell` 等服务，零外部依赖、零数据库；唯一持久化状态（收藏 / 常驻）以工作区文件 `packer2-favorites.json` 保存。启动后自动在 dsh Web 界面注入入口按钮，并提供独立页面。
@@ -32,7 +34,14 @@ Cordis「**便携包**」目前可能只支持Windows端使用，后续会加配
 
 假设dsh根目录为A：E:\harness\deepseek-harness
 
-### 方式一（推荐）：从 git 安装（真实安装，重启 dsh 生效）
+### 方式一（推荐）：npm 安装（真实安装，重启 dsh 生效）
+
+```sh
+pnpm dsh plugin --profile web add dsh-mycordis        # 从 npm 注册表安装（一行命令）
+pnpm dsh --profile web								  #重启 dsh
+```
+
+或从 git 安装（源码分发，可指定分支/tag）：
 
 ```sh
 pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git #建议在根目录A下执行

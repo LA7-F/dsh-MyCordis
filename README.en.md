@@ -2,6 +2,8 @@
 
 English | [中文](README.md)
 
+[![npm](https://img.shields.io/npm/v/dsh-mycordis.svg)](https://www.npmjs.com/package/dsh-mycordis)
+
 MyCordis is itself an instance of dsh's "**everything is a plugin**" architecture: it loads as a session-level dynamic plugin, packs and installs itself to validate the toolchain, and has also been exercised against other demo plugins.
 
 It reuses Harness services such as `webServer` / `dynamicCordisRunner` / `fs` / `shell` with zero external dependencies and zero database; the only persisted state (favorites / resident plugins) is stored in the workspace file `packer2-favorites.json`. Once started, it injects an entry button into the dsh Web UI and serves its own page.
@@ -32,11 +34,18 @@ Repository: <https://github.com/LA7-F/dsh-MyCordis>
 
 Assume the dsh root directory is **A**: `E:\harness\deepseek-harness`
 
-### Method 1 (recommended): install from git (real install; takes effect after restarting dsh)
+### Method 1 (recommended): install from npm (real install; takes effect after restarting dsh)
+
+```sh
+pnpm dsh plugin --profile web add dsh-mycordis        # one-line install from the npm registry
+pnpm dsh --profile web                                # restart dsh
+```
+
+Or install from git (source distribution; pin a branch/tag):
 
 ```sh
 pnpm dsh plugin --profile web add git+https://github.com/LA7-F/dsh-MyCordis.git # recommended: run from root A
-pnpm dsh --profile web                                                          # restart dsh
+pnpm dsh --profile web                                # restart dsh
 ```
 
 ### Method 2: clone first, then install (local install after git clone)
