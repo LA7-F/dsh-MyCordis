@@ -168,7 +168,7 @@ function entrySource(pkgName) {
   return [
     '/**',
     ' * ' + pkgName + ' — 由 我的Cordis 从会话级动态插件合成。',
-    ' * host 半区以 async 函数体求值；client 半区（浏览器沙箱代码）仅存档不运行。',
+    ' * host 半区以 async 函数体求值；harness.handle 桥接到私有 connection.rpc channel。',
     ' */',
     "import { readFileSync } from 'node:fs'",
     '',
@@ -177,9 +177,10 @@ function entrySource(pkgName) {
     '',
     'export const name = manifest.name',
     '',
-    '// 组合插件环境不提供动态沙箱的 harness 全局，注入等价垫片：',
-    '// defineTool 原样透传（DSL 由 tools 服务校验），registerTool 落到 ctx.tools.register，',
-    '// handle（包私有 Client→Host RPC）在组合环境无对应通道，降级 no-op 并告警。',
+    '// 组合插件环境不提供动态沙箱的 harness 全局，注入等价垫片。',
+    '// defineTool 透传（DSL 由 tools 服务校验），registerTool 落到 ctx.tools.register，',
+    '// handle 捕获 handler，由 apply 里的私有 connection.rpc channel 分发（等价 host.call）。',
+    'const handlers = new Map()',
     'const harness = {',
     '  defineTool(def) { return def },',
     '  registerTool(ctx, tool) {',
@@ -188,9 +189,10 @@ function entrySource(pkgName) {
     "    console.warn('[' + manifest.name + '] harness.registerTool: tools 服务不可用，工具未注册')",
     '    return function () {}',
     '  },',
-    '  handle(method) {',
-    "    console.warn('[' + manifest.name + '] harness.handle(\"' + method + '\") 在组合插件环境不可用（无包私有 RPC），已降级为 no-op')",
-    '    return function () {}',
+    '  handle(method, fn) {',
+    "    if (typeof method !== 'string' || method === '' || typeof fn !== 'function') throw new Error('harness.handle(method, fn) 需要方法名 + 处理函数')",
+    '    handlers.set(method, fn)',
+    '    return function () { if (handlers.get(method) === fn) handlers.delete(method) }',
     '  },',
     '}',
     '',
@@ -198,6 +200,16 @@ function entrySource(pkgName) {
     "  if (HOST_CODE.trim() === '') {",
     "    console.warn('[' + manifest.name + '] 此包无 host 半区（client-only），在 Node 组合中无可执行逻辑')",
     '    return',
+    '  }',
+    '  // 私有 RPC channel：客户端 host.call 经 connection.rpc.call 调到 harness.handle 注册的方法',
+    "  const conn = ctx.get('connection')",
+    "  if (conn && conn.rpc && typeof conn.rpc.handle === 'function') {",
+    "    const dispose = conn.rpc.handle('/' + manifest.name, async function (endpoint, payload) {",
+    '      const fn = handlers.get(endpoint)',
+    "      if (typeof fn !== 'function') return { ok: false, error: { code: 'method-not-found', message: 'no handler \"' + endpoint + '\"', details: {} } }",
+    '      try { return { ok: true, value: await fn(payload) } } catch (e) { return { ok: false, error: { code: \'handler-error\', message: String(e && e.message ? e.message : e), details: {} } } }',
+    "    }, { authority: 'loopback' })",
+    "    ctx.effect(function () { return dispose }, manifest.name + ': rpc channel')",
     '  }',
     "  const factory = new Function('harness', 'return (async () => {\\n' + HOST_CODE + '\\n})()')",
     '  const plugin = await factory(harness)',
@@ -208,6 +220,44 @@ function entrySource(pkgName) {
     '}',
     '',
     'export default { name, apply }',
+    '',
+  ].join('\n')
+}
+function clientBundleSource(pkgName, clientCode) {
+  if (String(clientCode || '').trim() === '') return '// no client half\n'
+  const codeLit = JSON.stringify(String(clientCode))
+  return [
+    '// ' + pkgName + ' client 半区 — 由 我的Cordis 合成（factory-form CJS）',
+    'window.__ModuleLoader__.load({ id: ' + JSON.stringify(String(pkgName)) + ', factory: (require) => {',
+    'var module = { exports: {} }; var exports = module.exports;',
+    "var React = require('react');",
+    'var CLIENT_CODE = ' + codeLit + ';',
+    'var __ctx = null;',
+    'var host = { call: async function (method, args) {',
+    "  var conn = __ctx && __ctx.get('connection');",
+    "  if (!conn || !conn.rpc || typeof conn.rpc.call !== 'function') throw new Error('connection.rpc.call 不可用');",
+    "  var r = await conn.rpc.call(" + JSON.stringify('/' + String(pkgName)) + ", method, args === undefined ? null : args);",
+    "  if (!r || r.ok !== true) throw new Error((r && r.error && r.error.message) || 'RPC 调用失败');",
+    '  return r.value;',
+    '} };',
+    'var styles = { insert: function () { return function () {} } };',
+    'var __ready = null;',
+    'function __load() {',
+    '  if (!__ready) {',
+    "    var f = new Function('React', 'host', 'styles', 'return (async () => {\\n' + CLIENT_CODE + '\\n})()');",
+    '    __ready = f(React, host, styles);',
+    '  }',
+    '  return __ready;',
+    '}',
+    'module.exports = {',
+    '  apply: async function (ctx) {',
+    '    __ctx = ctx;',
+    '    var inner = await __load();',
+    "    if (inner && typeof inner.apply === 'function') return inner.apply(ctx);",
+    '  },',
+    '};',
+    'return module.exports;',
+    '} });',
     '',
   ].join('\n')
 }
@@ -849,7 +899,7 @@ async function packSessionPlugin(ctx, payload) {
   const pkgName = String((inspected && inspected.pluginId) || pluginId)
   const version = '0.1.0'
   const notes = []
-  if (clientCode.trim() !== '') notes.push('client 半区为浏览器沙箱代码，不进入 Node bundle（已存档 client.js）')
+  if (clientCode.trim() !== '') notes.push('client 半区已打包为组合环境可加载的 factory-form CJS（经 __ModuleLoader__ 装载，host.call 桥接 connection.rpc）')
   if (/(^|[^\w$.])harness\s*[.([]/.test(hostCode)) notes.push('host 半区引用沙箱全局 harness：安装为普通组合插件后运行时可能未定义')
   const ws = await workspaceRoot(ctx)
   if (!ws) throw new Error('无法确定工作区根目录')
@@ -865,15 +915,17 @@ async function packSessionPlugin(ctx, payload) {
   if (shell === undefined) throw new Error('shell 服务不可用')
   try {
     await runShell(ctx, 'New-Item -ItemType Directory -Force -Path ' + sq(staging) + ',' + sq(outDir), undefined, policy)
+    const hasClient = clientCode.trim() !== ''
     const manifest = {
       name: pkgName, version, description: (inspected && inspected.purpose) || '', type: 'module', main: 'index.js',
       files: ['index.js', 'host.js', 'client.js', 'cordis.patch.yml'],
-      dsh: { bundle: { patch: './cordis.patch.yml' } },
+      ...(hasClient ? { exports: { '.': './index.js', './client': './client.js' } } : {}),
+      dsh: { bundle: { patch: './cordis.patch.yml' }, ...(hasClient ? { client: { platform: 'web' } } : {}) },
     }
     const files = {
       'package.json': JSON.stringify(manifest, null, 2),
       'host.js': hostCode,
-      'client.js': clientCode,
+      'client.js': clientBundleSource(pkgName, clientCode),
       'index.js': entrySource(pkgName),
       'cordis.patch.yml': '# synthesized by packer2\n- insert:\n    - id: ' + pkgName + '\n      name: ' + pkgName + '\n',
     }
@@ -948,7 +1000,7 @@ async function exportBatch(ctx, payload) {
   const results = []
   for (const p of plugins) {
     try {
-      const data = sanitizePortable(exportDynamicPlugin(ctx, p.pluginId, p.packageId, true))
+      const data = sanitizePortable(exportDynamicPlugin(ctx, p.pluginId, p.packageId))
       const artifact = outDir.replace(/[\\/]+$/, '') + '/' + data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const target = await fs.resolve(artifact)
       await fs.writeText(target, JSON.stringify(data, null, 2), undefined, undefined, policy)
@@ -998,7 +1050,7 @@ async function packWhole(ctx, payload) {
       const subDir = outDir.replace(/[\\/]+$/, '') + '/' + pluginId + (packageId === '' ? '' : '-' + packageId)
       await runShell(ctx, 'New-Item -ItemType Directory -Force -Path ' + sq(subDir), undefined, policy)
       const tgz = await packSessionPlugin(ctx, { pluginId: pluginId, packageId: packageId, outDir: subDir })
-      const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId, true))
+      const data = sanitizePortable(exportDynamicPlugin(ctx, pluginId, packageId))
       const portableName = data.pluginId + '-' + data.packageId + '.dshplugin.json'
       const artifact = subDir.replace(/[\\/]+$/, '') + '/' + portableName
       const target = await fs.resolve(artifact)
