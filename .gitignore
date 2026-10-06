@@ -1,0 +1,39 @@
+# ────────────────────────────────────────────────────────────────
+# MyCordis v2（dsh-mycordis）忽略规则
+# ────────────────────────────────────────────────────────────────
+
+# ── 本仓库约定：过程性文件 / 缓存 ─────────────────────────────
+# 见 说明.md：不需要进版本库的过程性文件与缓存一律放进「缓存/」。
+/缓存/
+
+# ── 打包 / 构建产物（可由 src/ + tools/ 重新生成）─────────────
+# pnpm pack 的临时 staging（src/packages/cordis/pack.js 会自行清理，异常时残留）
+/.packer2/
+# 默认「放置目录」：dsh 包 .tgz + 便携包 .dshplugin.json
+/packer2-out/
+*.tgz
+*.dshplugin.json
+# 安装器覆盖前的备份（tools/install.mjs 生成 <name>.bak-<时间戳>）
+*.bak-*
+# 本地 dsh profile 兜底安装目录（若在仓库内试装）
+/profiles/
+
+# 说明：host.js / client.js / cordis.patch.yml 虽然由打包流程产出，
+# 但它们是 npm 包的分发内容（package.json 的 files 字段），必须留在版本库里；
+# host.js 由 tools/build.mjs 从 src/packages/** 生成，请勿手改，
+# 提交前可用 “node tools/build.mjs --check” 确认与源码同步。
+
+# ── 依赖 / 包管理器 ──────────────────────────────────────────
+node_modules/
+.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# ── 编辑器 / 操作系统 ────────────────────────────────────────
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
