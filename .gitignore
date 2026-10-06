@@ -1,27 +1,27 @@
 # ────────────────────────────────────────────────────────────────
-# MyCordis v2（dsh-mycordis）忽略规则
+# MyCordis（dsh-mycordis）忽略规则
+# 约定：一条规则要能回答「为什么」；路径一律用 / 锚定，
+#       否则将来任何一层出现同名子目录都会被静默忽略。
 # ────────────────────────────────────────────────────────────────
 
-# ── 本仓库约定：过程性文件 / 缓存 ─────────────────────────────
-# 见 说明.md：不需要进版本库的过程性文件与缓存一律放进「缓存/」。
+# ── 过程性文件 / 中间产物 ─────────────────────────────────────
+# 缓存/ 只放「跑起来才会产生、删掉也能再生」的东西（见 缓存/说明.md）。
+# 源码 src/、工具 tools/、测试 tests/ 不进这里——它们要进版本库。
 /缓存/
 
-# ── 打包 / 构建产物（可由 src/ + tools/ 重新生成）─────────────
-# pnpm pack 的临时 staging（src/packages/cordis/pack.js 会自行清理，异常时残留）
+# ── 打包 / 构建产物（可由 src/ + tools/build.mjs 重新生成）──────
+# pnpm pack 的临时 staging（异常中断时残留）
 /.packer2/
 # 默认「放置目录」：dsh 包 .tgz + 便携包 .dshplugin.json
 /packer2-out/
+# 「复制信息」导出的快照
+/packer2-snapshot/
 *.tgz
 *.dshplugin.json
-# 安装器覆盖前的备份（tools/install.mjs 生成 <name>.bak-<时间戳>）
+# 安装/覆盖前的备份（<name>.bak-<时间戳>）
 *.bak-*
 # 本地 dsh profile 兜底安装目录（若在仓库内试装）
 /profiles/
-
-# 说明：host.js / client.js / cordis.patch.yml 虽然由打包流程产出，
-# 但它们是 npm 包的分发内容（package.json 的 files 字段），必须留在版本库里；
-# host.js 由 tools/build.mjs 从 src/packages/** 生成，请勿手改，
-# 提交前可用 “node tools/build.mjs --check” 确认与源码同步。
 
 # ── 依赖 / 包管理器 ──────────────────────────────────────────
 node_modules/
