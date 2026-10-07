@@ -10,7 +10,7 @@
 本仓库面向正式版 **DSH 桌面版 `0.2.0-rc.2`**（cordis `4.0.4`）。
 
 - 修掉 10 处让插件「装得上、跑不起来」的缺陷（B1–B10），见[适配改动一览](#适配改动一览)；
-- 把单体 `host.js` 按功能拆成 **17 个功能分包**（[`dev/src/packages/**`](dev/src/packages)），由
+- 把单体 `host.js` 按功能拆成 **19 个功能分包**（[`dev/src/packages/**`](dev/src/packages)），由
   [`dev/src/manifest.mjs`](dev/src/manifest.mjs) 拼回同一个 `host.js`（仍是一个 async 函数体）；
   分层地图与依赖方向见 [`dev/src/README.md`](dev/src/README.md)。
 
@@ -38,7 +38,7 @@
 | 能力 | 说明 |
 | --- | --- |
 | **打包整包** | 一次产出 dsh 安装包（`.tgz`）+ 便携包（`.dshplugin.json`），每插件一个子目录；支持单个与批量 |
-| **真实安装 / 卸载** | 面板里选 `.tgz` 即走 `dsh plugin add / remove`（profile 级真实安装，重启 DSH 生效） |
+| **真实安装 / 卸载** | 面板里选 `.tgz` 或填**安装路径**（未压缩文件夹 / git 仓库 / npm 包名）即走 `dsh plugin add / remove`（profile 级真实安装，重启 DSH 生效） |
 | **便携包跨会话** | 默认导出 **host + client 两个半区**，导入别的会话或机器后 UI 同样能复现；可勾「仅 host 半区」导出更小的纯 host 定义 |
 | **`.tgz` 也能当便携包** | 选 `.tgz` 导入时只用**系统 tar 解包**取两半区，**不安装**（不写 profile、不用选 profile、不用重启）；重启即消失，要常驻请收藏或真实安装 |
 | **导入即注册** | 导入只注册，点「运行 / 恢复」才启动；收藏（☆）、常驻（★ 重启自动恢复）、同名去重 |
@@ -98,7 +98,23 @@ pnpm dsh plugin --profile web add .\your-plugin-0.1.0.tgz
 pnpm dsh --profile web
 ```
 
-### 方式五：改源码后本地生效（开发者）
+### 方式五：在面板里安装（GUI，免命令行）
+
+打开「我的Cordis」面板 → **安装** 页 → ① 的**安装地址栏**（与 `.tgz` 上传共用一个按钮）：
+
+| 安装源 | 地址栏填什么 | 等价命令 |
+| --- | --- | --- |
+| **未压缩文件夹** | 本机绝对/相对路径（如 `E:\harness\dsh-MyCordis`），或点「选择文件夹…」用 DSH 原生目录选择器 | `dsh plugin add <路径>` |
+| **git 仓库** | `owner/repo`（按 GitHub 展开）、`https://gitee.com/LA7_F/dsh-MyCordis.git`、`git+https://…`、`git@host:owner/repo.git` | `dsh plugin add git+https://…` |
+| **npm 包名** | `dsh-mycordis`、`@scope/name`（版本号也支持，如 `dsh-mycordis@0.1.1`） | `dsh plugin add dsh-mycordis` |
+| **本地文件** | 清空地址栏，点「安装 dsh 包」按按钮选 `.tgz` / `.dshplugin` 上传；也可在地址栏直接填本机 `.tgz` 路径 | `dsh plugin add <本地路径>` |
+| **远程 URL** | `https://…` 的 npm tarball 地址（非 git 托管站点）原样交给 npm | `dsh plugin add https://…/x.tgz` |
+
+- 后端**自动判定**安装源类型：显式前缀（`file:` / `link:` / `git+` / `git@`）→ git 地址 → 在磁盘上真实存在的路径（目录=文件夹安装、文件=安装包）→ 其余按 npm 包名 / 远程 URL 交给 npm。
+- **文件夹安装的硬要求**：其 `package.json` 必须有合法的 npm `name`（小写字母/数字/`-._`）。中文目录名或缺失 `name` 会被 pnpm 判 `INVALID_DEPENDENCY_NAME`——面板会在安装前就拦下并说明原因。
+- 安装写的是 `$DSH_HOME/profiles/<profile>`，重新选 profile 用地址栏右侧的输入框（默认按当前部署回填）；装完**重启 dsh** 生效，装 `desktop` profile 需先完全退出桌面版。
+
+### 方式六：改源码后本地生效（开发者）
 
 源码按功能分层放在 [`dev/src/`](dev/src)（地图见 [`dev/src/README.md`](dev/src/README.md)），
 [`lib/host.js`](lib/host.js) 是**产物**。改完片段后：
@@ -113,7 +129,7 @@ node dev/tests/smoke.test.mjs   # 回归门禁
 
 - **链接安装**（推荐调试）：`pnpm dsh plugin --profile web add link:.<本仓库>`，
   之后改 `lib/` 即时生效，只需重启 DSH；
-- 或按方式一至四之一**重新安装 / 升级**包，再重启 DSH。
+- 或按方式一至五之一**重新安装 / 升级**包，再重启 DSH。
 
 > 装到 `desktop` profile 必须**完全退出桌面版**（官方 `requireDesktopProfile` 约束）。
 
@@ -138,7 +154,7 @@ node dev/tests/smoke.test.mjs   # 回归门禁
 | 页签 | 作用 |
 | --- | --- |
 | **打包** | 设置放置目录（默认 `<工作区>/packer2-out`）→ 选打包类型（`dsh 包` / `便携包` / `整包`）→ 单个打包或「一键打包」批量 |
-| **安装** | 上传 `.tgz` **真实安装**；导入 `.dshplugin.json` **或 `.tgz`**（仅解包注册，不安装、不自动运行）；选择所属会话 |
+| **安装** | 上传 `.tgz`、或填**安装路径**（未压缩文件夹 / git 仓库 / npm 包名）**真实安装**；导入 `.dshplugin.json` **或 `.tgz`**（仅解包注册，不安装、不自动运行）；选择所属会话 |
 | **临时插件** | 当前会话已注册的插件：运行 / 强制重启、复制跨会话定位信息、导出定义 |
 | **管理与卸载** | 列出指定 profile 已安装的插件并卸载；收藏 / 常驻 / 恢复收藏 / 同名插件去重 |
 
@@ -173,7 +189,7 @@ node dev/tests/smoke.test.mjs   # 回归门禁
 | `/packer2/api/import` | POST | 导入便携包：`data`（`.dshplugin.json` 对象）或 `tgzPath`（`.tgz` 解包，**不安装**）；注册；`allowWake` 才走会唤醒的通道 |
 | `/packer2/api/run` | POST | 运行 / 重启已注册插件（默认零唤醒；`wake:true` 才唤醒） |
 | `/packer2/api/upload` | POST | 上传 `.tgz` / `.dshplugin` 文件 |
-| `/packer2/api/install` | POST | 安装 dsh 包（真实安装） |
+| `/packer2/api/install` | POST | 真实安装：`source`（未压缩文件夹路径 / git 仓库地址 / npm 包名 / 本地 `.tgz`、`.dshplugin` 路径；`path` 为等价旧字段）+ `sourceKind`（可选：`auto` / `dir` / `git` / `file` / `npm`）+ `profile` |
 | `/packer2/api/uninstall` | POST | 卸载 dsh 插件 |
 | `/packer2/api/installed` | GET | 指定 profile 的已安装插件清单 |
 | `/packer2/api/favorites` | GET | 收藏列表 |
@@ -252,13 +268,13 @@ mycordis-v3/
 ├── dev/                    # 开发资产：不在 package.json 的 files 里，因此不进 npm 包
 │   ├── README.md           # 开发入口：怎么改、改完跑什么
 │   ├── src/                # host 半区源码：按功能分层
-│   │   ├── README.md       # 分层地图（17 个分包的职责与依赖方向）
+│   │   ├── README.md       # 分层地图（19 个分包的职责与依赖方向）
 │   │   ├── manifest.mjs    # ★ 唯一事实源：拼接顺序 / 职责 / provides
 │   │   └── packages/
 │   │       ├── base/       # 与 DSH 无关的纯工具：text / http-io / security（信任栅栏在此）
 │   │       ├── runtime/    # DSH 服务接入：workspace / shell / cli / picker
 │   │       ├── cordis/     # 会话级插件领域：inventory / portable / pack / import / favorites
-│   │       ├── install/    # profile 层真实安装：profile.js
+│   │       ├── install/    # 安装源识别 + profile 层真实安装：source.js / profile.js
 │   │       ├── ui/         # 浏览器 UI：button.js（悬浮入口）/ page.js（面板页面）
 │   │       ├── http/       # 路由表：router.js（handleRequest）
 │   │       └── plugin.js   # 入口：inject + apply（必须最后）
@@ -405,4 +421,4 @@ node dev/tests/smoke.test.mjs     # 回归门禁（当前基线：passed=55 fail
 
 - 上游仓库：GitHub <https://github.com/LA7-F/dsh-MyCordis> ｜ Gitee <https://gitee.com/LA7_F/dsh-MyCordis>
 - [Cordis](https://github.com/cordiverse/cordis) —— 底层插件运行时
-- [src/README.md](dev/src/README.md) —— 17 个功能分包的分层地图与改码流程
+- [src/README.md](dev/src/README.md) —— 19 个功能分包的分层地图与改码流程

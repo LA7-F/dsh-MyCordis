@@ -3,34 +3,63 @@
 const PROFILE_BASE_BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-headless']
 // 本插件自身的包名（package.json name）：禁止自我卸载，否则面板自己先消失。
 const SELF_PLUGIN_NAME = 'dsh-mycordis'
+function installNoteFor(source, profile, quitHint) {
+  const head = source.kind === 'local-dir'
+    ? ('已执行 dsh plugin add（本地文件夹：' + source.spec + '；dsh link 会随源码改动生效）')
+    : source.kind === 'git'
+      ? ('已执行 dsh plugin add（git 仓库：' + source.detail + '）')
+      : source.kind === 'npm'
+        ? ('已执行 dsh plugin add（npm 包：' + source.detail + '）')
+        : ('已执行 dsh plugin add（本地安装包：' + source.spec + '）')
+  return head + '；重启 dsh 后生效（profile: ' + profile + '）' + quitHint
+}
+function installErrorHint(profile) {
+  return '（安装会写入 $DSH_HOME/profiles/' + profile + '，按沙箱策略可能需要批准；'
+    + '文件夹安装要求其 package.json 的 name 是合法 npm 包名——报 INVALID_DEPENDENCY_NAME 就是这个原因，'
+    + '改 name 或改用「安装 dsh 包」上传 .tgz；git 安装需要机器上能访问该仓库与 git）'
+}
+/**
+ * profile 层真实安装：安装源由 resolveInstallSource 归一。
+ * payload.path 与 payload.source 等价（兼容旧面板），payload.sourceKind 可选（auto/dir/git/file/npm）。
+ */
 async function installBundle(ctx, payload) {
-  const path = String(payload && payload.path || '').trim()
+  const input = String((payload && (payload.source || payload.path)) || '').trim()
+  const kindHint = String((payload && payload.sourceKind) || '').trim()
   const profile = String(payload && payload.profile || 'web').trim()
   if (!validProfile(profile)) throw new Error('非法的 profile 名称（仅允许字母/数字/-/_）')
-  if (!path) throw new Error('缺安装路径')
+  if (!input) throw new Error('缺安装源（可填未压缩文件夹路径 / git 仓库地址 / npm 包名 / .tgz 文件）')
   const ws = await workspaceRoot(ctx) || ''
   // 暂存目录与清理都在工作区内：显式钉住本工作区为 workspace-write 边界
   // （全局路由下 ctx.sandboxPolicy.resolve() 的根是部署兜底根，不是会话工作区）。
   const wsPolicy = workspaceWritePolicy(ws)
-  let target = path
-  let tmpDir = null
-  if (/\.dshplugin$/i.test(path)) {
-    tmpDir = ws.replace(/[\\/]+$/, '') + '/.packer2/install-' + rand()
-    await runShell(ctx, 'New-Item -ItemType Directory -Force -Path ' + sq(tmpDir), undefined, wsPolicy)
-    target = tmpDir + '/install.tgz'
-    await runShell(ctx, 'Copy-Item -Force ' + sq(path) + ' ' + sq(target), undefined, wsPolicy)
+  const source = await resolveInstallSource(ctx, input, kindHint, wsPolicy)
+  let target = source.spec
+  let staged = ''
+  // .dshplugin 不是 npm 包，dsh plugin add 读不了：先在工作区里改名成 .tgz 再装（旧行为，保留）。
+  if (source.kind === 'local-file' && /\.dshplugin$/i.test(source.spec)) {
+    const dir = ws.replace(/[\\/]+$/, '') + '/.packer2/install-' + rand()
+    await ensureDir(ctx, dir, wsPolicy)
+    staged = dir + '/install.tgz'
+    try {
+      await runShell(ctx, isWindowsHost()
+        ? 'Copy-Item -Force ' + sq(source.spec) + ' ' + sq(staged)
+        : 'cp -f ' + sq(source.spec) + ' ' + sq(staged), undefined, wsPolicy)
+    } catch (e) {
+      try { await removeTree(ctx, dir, wsPolicy) } catch (e2) { /* best effort */ }
+      throw new Error('暂存 .dshplugin 失败：' + safeErrorMsg(e))
+    }
+    target = staged
   }
   const policy = { mode: 'danger-full-access' }
   const cliPrefix = await resolveDshCli(ctx)
   const quitHint = desktopQuitHint(profile)
   try {
     await runShell(ctx, cliPrefix + ' plugin --profile ' + sq(profile) + ' add ' + sq(target), ws, policy, 300000)
-    if (tmpDir) { try { await runShell(ctx, 'Remove-Item -Recurse -Force ' + sq(tmpDir), undefined, wsPolicy) } catch (e) { /* best effort */ } }
-    return { ok: true, path, profile, note: '已执行 dsh plugin add；重启 dsh 后生效（profile: ' + profile + '）' + quitHint }
+    if (staged !== '') { try { await removeTree(ctx, staged.replace(/\/install\.tgz$/i, ''), wsPolicy) } catch (e) { /* best effort */ } }
+    return { ok: true, path: input, source: input, kind: source.kind, detail: source.detail, profile, note: installNoteFor(source, profile, quitHint) }
   } catch (error) {
-    if (tmpDir) { try { await runShell(ctx, 'Remove-Item -Recurse -Force ' + sq(tmpDir), undefined, wsPolicy) } catch (e) { /* best effort */ } }
-    const msg = String(error && error.message ? error.message : error)
-    throw new Error('安装失败：' + msg + quitHint + '（安装会写入 $DSH_HOME/profiles/' + profile + '，需要提升沙箱权限，请在弹窗中批准；若报 INVALID_DEPENDENCY_NAME，请用「安装 dsh 包」选 .tgz 文件而非中文名目录）')
+    if (staged !== '') { try { await removeTree(ctx, staged.replace(/\/install\.tgz$/i, ''), wsPolicy) } catch (e) { /* best effort */ } }
+    throw new Error('安装失败：' + safeErrorMsg(error) + quitHint + installErrorHint(profile))
   }
 }
 async function dshHome(ctx) {

@@ -27,10 +27,10 @@ base  →  runtime  →  cordis  →  install  →  ui / http  →  plugin
 
 | 层 | 职责 |
 |---|---|
-| `base` | 通用文本与标识工具：HTML 转义、跨平台 shell 引用、随机标识；HTTP 底层 I/O：回包助手、请求体读取与上限、URL 拆分；信任栅栏（loopback Host + 同源 Origin + 无 Origin 放行）与路径/文件名/错误净化 |
+| `base` | 通用文本与标识工具：HTML 转义、跨平台 shell 引用、随机标识；HTTP 底层 I/O：回包助手、请求体读取与上限、URL 拆分；信任栅栏（loopback Host + 同源 Origin + 无 Origin 放行）与路径/文件名/错误净化；安装源规格：npm 包名校验、git 地址归一、凭据打码 |
 | `runtime` | 工作区与会话解析：当前会话 id、工作区根目录（B9 解析链）；shell 服务封装、跨平台目录助手与存在性探测；dsh CLI 与 pnpm 的可执行入口定位（桌面版 resources / 工作区 / PATH，跨平台）；原生目录选择器：直接调用 DSH 自己的 directoryPicker（native 能力） |
 | `cordis` | 会话级动态插件清单：当前包名、runner.inventory 归一化；便携包定义与导出：脱敏标识、单/批量导出、快照导出；打包：包入口源码生成、上传解包、单插件/批量/整包（dsh + 便携）；导入定义（define/run）、手动运行与同名去重；收藏持久化（串行写入 + 旧位置迁移兜底）、恢复、常驻自动拉起 |
-| `install` | profile 层真实安装/卸载：dsh plugin add/remove、已装清单 |
+| `install` | 安装源识别（未压缩文件夹的 package.json 预检、已存在路径归类）；profile 层真实安装/卸载：dsh plugin add/remove、已装清单 |
 | `ui` | 页面右下角悬浮入口按钮与其 index 注入脚本；「我的Cordis」面板页面（HTML/CSS/前端 JS 模板） |
 | `http` | HTTP 路由表：请求分发、统一错误处理、各 API 端点 |
 | `(入口)` | 插件入口：inject 声明、路由注册、index 注入、常驻自恢复 |
@@ -44,6 +44,7 @@ base  →  runtime  →  cordis  →  install  →  ui / http  →  plugin
 | `dev/src/packages/base/text.js` | `base/text` | 通用文本与标识工具：HTML 转义、跨平台 shell 引用、随机标识 | `esc` `isWindowsHost` `sq` `rand` |
 | `dev/src/packages/base/http-io.js` | `base/http-io` | HTTP 底层 I/O：回包助手、请求体读取与上限、URL 拆分 | `send` `sendDownload` `sendHtml` `MAX_BODY_BYTES` `readBody` `parsePath` |
 | `dev/src/packages/base/security.js` | `base/security` | 信任栅栏（loopback Host + 同源 Origin + 无 Origin 放行）与路径/文件名/错误净化 | `parseAuthority` `isLoopbackHostname` `parseOrigin` `defaultPort` `isTrustedRequest` `validProfile` `normPath` `sanitizeFilename` `safeErrorMsg` |
+| `dev/src/packages/base/source-spec.js` | `base/source-spec` | 安装源规格（与 DSH 无关）：npm 包名校验、git 地址归一、凭据打码、类型名 | `PACKAGE_NAME_RE` `PACKAGE_NAME_MAX` `validPackageName` `redactUrl` `normalizeGitSpec` `isGitSource` `kindTextOf` |
 | `dev/src/packages/runtime/workspace.js` | `runtime/workspace` | 工作区与会话解析：当前会话 id、工作区根目录（B9 解析链） | `resolveCurrentSessionId` `sessionTitleOf` `listSessions` `workspaceWritePolicy` `sessionCwdOf` `workspaceRoot` |
 | `dev/src/packages/runtime/shell.js` | `runtime/shell` | shell 服务封装、跨平台目录助手与存在性探测 | `runShell` `ensureDir` `removeTree` `probePathExists` `probeAsarExists` `probeOnPath` |
 | `dev/src/packages/runtime/cli.js` | `runtime/cli` | dsh CLI 与 pnpm 的可执行入口定位（桌面版 resources / 工作区 / PATH，跨平台） | `desktopQuitHint` `shellCallPrefix` `electronRunAsNodePrefix` `resolveDshCli` `resolvePnpm` |
@@ -53,7 +54,8 @@ base  →  runtime  →  cordis  →  install  →  ui / http  →  plugin
 | `dev/src/packages/cordis/pack.js` | `cordis/pack` | 打包：包入口源码生成、上传解包、单插件/批量/整包（dsh + 便携） | `entrySource` `uploadBundle` `fileSha256AndSize` `packSessionPlugin` `packBatch` `packWhole` |
 | `dev/src/packages/cordis/import.js` | `cordis/import` | 导入定义（define/run）、手动运行与同名去重 | `tryRun` `importDynamicPlugin` `runDynamicPlugin` `dedupePlugins` |
 | `dev/src/packages/cordis/favorites.js` | `cordis/favorites` | 收藏持久化（串行写入 + 旧位置迁移兜底）、恢复、常驻自动拉起 | `favQueue` `favSerialize` `favoritesPath` `legacyFavoritesPath` `readFavorites` `writePolicyFor` `writeFavorites` `favoriteAdd` `favoriteRemove` `favoriteSetResident` `restoreOne` `restoreFavorites` `autoRestoreResident` |
-| `dev/src/packages/install/profile.js` | `install/profile` | profile 层真实安装/卸载：dsh plugin add/remove、已装清单 | `PROFILE_BASE_BUNDLES` `SELF_PLUGIN_NAME` `installBundle` `dshHome` `profileNameOfDir` `activeProfile` `installedPlugins` `uninstallBundle` |
+| `dev/src/packages/install/source.js` | `install/source` | 安装源识别（文件夹 package.json 预检 / 已存在路径归类，需要 fs 与 shell） | `readInstallManifest` `installPathKind` `localDirSource` `resolveInstallSource` |
+| `dev/src/packages/install/profile.js` | `install/profile` | profile 层真实安装/卸载：dsh plugin add/remove、已装清单 | `PROFILE_BASE_BUNDLES` `SELF_PLUGIN_NAME` `installNoteFor` `installErrorHint` `installBundle` `dshHome` `profileNameOfDir` `activeProfile` `installedPlugins` `uninstallBundle` |
 | `dev/src/packages/ui/button.js` | `ui/button` | 页面右下角悬浮入口按钮与其 index 注入脚本 | `buttonScript` `injectButton` |
 | `dev/src/packages/ui/page.js` | `ui/page` | 「我的Cordis」面板页面（HTML/CSS/前端 JS 模板） | `pageHtml` |
 | `dev/src/packages/http/router.js` | `http/router` | HTTP 路由表：请求分发、统一错误处理、各 API 端点 | `handleRequest` |

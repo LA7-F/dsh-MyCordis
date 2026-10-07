@@ -16,10 +16,10 @@ export const preamble = "// ── 我的Cordis：会话级动态插件打包/�
 
 /** 分层职责（供文档与审阅使用，不参与拼接）。 */
 export const layers = {
-  "base/": "与 DSH 无关的纯工具：文本 / HTTP I/O / 信任栅栏与净化。可被任何层依赖，自己不依赖任何层。",
+  "base/": "与 DSH 无关的纯工具：文本 / HTTP I/O / 信任栅栏与净化 / 安装源规格。可被任何层依赖，自己不依赖任何层。",
   "runtime/": "DSH 运行时服务接入：工作区与会话解析、shell 与目录助手、CLI/pnpm 定位、原生目录选择。",
   "cordis/": "会话级动态插件领域逻辑：清单、便携定义、打包、导入、收藏与常驻。",
-  "install/": "profile 层真实安装 / 卸载（写 $DSH_HOME，风险最高，单独成层）。",
+  "install/": "profile 层真实安装 / 卸载（安装源归一 + 写 $DSH_HOME，风险最高，单独成层）。",
   "ui/": "浏览器侧呈现：悬浮入口按钮、面板页面模板。",
   "http/": "对外接口：路由表与统一错误处理，只调用上面各层。",
   "plugin": "入口：inject 声明与装配，必须排在最后（含顶层 return）。"
@@ -50,6 +50,12 @@ export const modules = [
     file: "packages/base/security.js",
     role: "信任栅栏（loopback Host + 同源 Origin + 无 Origin 放行）与路径/文件名/错误净化",
     provides: ["parseAuthority", "isLoopbackHostname", "parseOrigin", "defaultPort", "isTrustedRequest", "validProfile", "normPath", "sanitizeFilename", "safeErrorMsg"],
+  },
+  {
+    id: "base/source-spec",
+    file: "packages/base/source-spec.js",
+    role: "安装源规格（与 DSH 无关）：npm 包名校验、git 地址归一、凭据打码、类型名",
+    provides: ["PACKAGE_NAME_RE", "PACKAGE_NAME_MAX", "validPackageName", "redactUrl", "normalizeGitSpec", "isGitSource", "kindTextOf"],
   },
   {
     id: "runtime/workspace",
@@ -106,10 +112,16 @@ export const modules = [
     provides: ["favQueue", "favSerialize", "favoritesPath", "legacyFavoritesPath", "readFavorites", "writePolicyFor", "writeFavorites", "favoriteAdd", "favoriteRemove", "favoriteSetResident", "restoreOne", "restoreFavorites", "autoRestoreResident"],
   },
   {
+    id: "install/source",
+    file: "packages/install/source.js",
+    role: "安装源识别（文件夹 package.json 预检 / 已存在路径归类，需要 fs 与 shell）",
+    provides: ["readInstallManifest", "installPathKind", "localDirSource", "resolveInstallSource"],
+  },
+  {
     id: "install/profile",
     file: "packages/install/profile.js",
     role: "profile 层真实安装/卸载：dsh plugin add/remove、已装清单",
-    provides: ["PROFILE_BASE_BUNDLES", "SELF_PLUGIN_NAME", "installBundle", "dshHome", "profileNameOfDir", "activeProfile", "installedPlugins", "uninstallBundle"],
+    provides: ["PROFILE_BASE_BUNDLES", "SELF_PLUGIN_NAME", "installNoteFor", "installErrorHint", "installBundle", "dshHome", "profileNameOfDir", "activeProfile", "installedPlugins", "uninstallBundle"],
   },
   {
     id: "ui/button",

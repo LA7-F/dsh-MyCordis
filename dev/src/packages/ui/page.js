@@ -111,17 +111,18 @@ ul{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius
 .tag.self{background:var(--warn-weak);border-color:var(--warn-line);color:var(--warn)}
 .tag.miss{background:var(--err-weak);border-color:var(--err-line);color:var(--err)}
 /* ── 插件卡片 ── */
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px}
-.card{min-height:134px;max-width:300px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel);padding:8px;display:flex;flex-direction:column;gap:5px;position:relative;min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+/* auto-fill（不是 auto-fit）：卡片只有一两张时也保持一行的等宽小卡，不会被拉成大块 */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.card{min-height:152px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel);padding:8px;display:flex;flex-direction:column;gap:5px;position:relative;min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}
 .card:hover{border-color:var(--accent-line);box-shadow:var(--shadow)}
 .card .star{position:absolute;top:4px;right:4px;width:22px;height:22px;background:none;border:none;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;color:#d4a017;padding:0}
 .card .star:hover{background:var(--panel3)}
 .card .cname{font-weight:600;font-size:11.5px;line-height:1.3;padding-right:20px;height:30px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;flex:none}
 .card .cid{font-family:var(--mono);font-size:9.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none}
 .card select{width:100%;height:24px;font-size:10.5px;flex:none}
-/* 四个动作压在一行（运行 / 常驻 / 恢复 / 复制）：等分 + 省略号，多一个动作也不会换行 */
-.card .cactions{display:flex;gap:3px;margin-top:auto;flex:none}
-.card .cactions button{flex:1 1 0;min-width:0;height:24px;padding:0;overflow:hidden;text-overflow:ellipsis;border:1px solid var(--line);border-radius:var(--r3);background:var(--panel2);color:var(--fg2);font:inherit;font-size:10.5px;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+/* 动作 2×2：运行 / 常驻 在上，恢复 / 复制 在下 */
+.card .cactions{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:auto;flex:none}
+.card .cactions button{min-width:0;height:24px;padding:0;overflow:hidden;text-overflow:ellipsis;border:1px solid var(--line);border-radius:var(--r3);background:var(--panel2);color:var(--fg2);font:inherit;font-size:11px;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
 .card .cactions button:hover:not(:disabled){border-color:var(--muted);color:var(--fg)}
 .card .cactions button:disabled{opacity:.4;cursor:not-allowed}
 .card .cactions .resbtn.on{background:var(--accent-weak);border-color:var(--accent-line);color:var(--accent);font-weight:600}
@@ -179,7 +180,8 @@ ${head}
   <div class="box">
     <div class="section">① 安装 dsh 包（真实安装，重启 dsh 生效）</div>
     <div class="desc">选择 .tgz 文件，自动上传并安装（等价于 dsh plugin add），需批准提升权限。</div>
-    <div class="row"><input id="iprofile" type="text" value="web" placeholder="profile（默认 web）"><input id="ifile" type="file" accept=".tgz,.dshplugin,application/gzip" style="display:none"><button id="ibtn" class="btn primary">安装 dsh 包</button></div>
+    <div class="row"><input id="ifile" type="file" accept=".tgz,.dshplugin,application/gzip" style="display:none"><input id="ipath" type="text" spellcheck="false" placeholder="未压缩文件夹路径 或 git 仓库地址（owner/repo、https://…、git+https://…）"><button id="ipathPick" class="btn">选择文件夹…</button><input id="iprofile" type="text" value="web" placeholder="profile（默认 web）" style="flex:none;width:130px"><button id="ibtn" class="btn primary">安装 dsh 包</button></div>
+    <div class="desc" style="margin:8px 0 0">地址栏支持：<b>未压缩文件夹</b>（如 <code>E:\\harness\\dsh-MyCordis</code>，需其 package.json 的 name 是合法 npm 包名）、<b>git 仓库</b>（<code>owner/repo</code> 简写按 GitHub 展开，也可直接写 <code>https://gitee.com/…</code> / <code>git+https://…</code>）、<b>npm 包名</b>（如 <code>dsh-mycordis</code>、<code>@scope/name</code>）、<b>本地 .tgz / .dshplugin 文件</b>；不定时按「先看路径是否真实存在、再按 git / npm 解析」自动判定。「选择文件夹…」调 DSH 原生目录选择器填入路径，点「安装 dsh 包」即按该路径安装（等价于 <code>dsh plugin add</code>，重启后生效）。</div>
   </div>
   <div class="box">
     <div class="section">② 导入便携包（注册为临时插件，非真实安装）</div>
@@ -327,11 +329,11 @@ ${head}
   function fmtSize(n) { if (n === undefined || n === null) return ''; if (n < 1024) return n + ' B'; if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'; return (n / 1048576).toFixed(1) + ' MB' }
   // 目录选择：POST 本插件的 /browse/pick，由 host 半区调用 DSH 自己的原生选择器
   // （ctx.directoryPicker.capability().pick()，见 runtime/picker）；不再自跑 PowerShell 弹窗。
-  function pickInto(inputId) {
+  function pickInto(inputId, after) {
     fetch(API + '/browse/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
       .then(function (r) { return r.json() })
       .then(function (f) {
-        if (f && f.picked) { $(inputId).value = f.picked; setCache(inputId, f.picked); return }
+        if (f && f.picked) { $(inputId).value = f.picked; setCache(inputId, f.picked); if (after) after(); return }
         if (f && f.error) log('err', '⚠ ' + f.error)
       })
       .catch(function (e) { log('err', '✘ 浏览失败: ' + e.message) })
@@ -343,7 +345,44 @@ ${head}
     $('ibtn').disabled = on
     $('ibtn').textContent = on ? '安装中…' : '安装 dsh 包'
   }
-  $('ibtn').onclick = function () { if (installBusy) return; $('ifile').click() }
+  function looksLikeGitSource(s) {
+    return /^git[+:]|^git@/i.test(s) || /^[a-z][a-z0-9+.-]*:\/\//i.test(s) || /^[\w.-]+\/[\w.-]+(?:\.git)?$/.test(s)
+  }
+  // 地址栏有内容 → 按安装源（文件夹 / git / npm）安装；地址栏为空 → 走文件选择上传 .tgz。
+  function readInstallSource() { return { source: $('ipath').value.trim() } }
+  // 安装结果渲染：上传 .tgz 与「地址栏路径 / git」两条来源共用。
+  function renderInstallResult(d) {
+    var good = d && (d.ok !== false) && (d.note !== undefined)
+    var detail = (d && d.detail) ? '（' + d.detail + '）' : ''
+    log(good ? 'ok' : 'err', (good ? '✔ ' : '✘ ') + ((d && (d.note || d.message)) || JSON.stringify(d)) + (good ? detail : ''))
+  }
+  function doInstall(source, kind, profile, label, done) {
+    clearLog()
+    log('step', '▸ 安装 ' + label + ' → profile ' + profile + ' …（需批准提升权限）')
+    fetch(API + '/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: source, sourceKind: kind, profile: profile }) })
+      .then(function (r) { return r.json() })
+      .then(function (d) { renderInstallResult(d); done(false) })
+      .catch(function (e) { log('err', '✘ ' + e.message); done(false) })
+  }
+  $('ibtn').onclick = function () {
+    if (installBusy) return
+    var src = readInstallSource().source
+    if (src === '') { $('ifile').click(); return } // 地址栏为空=上传 .tgz 安装；填了就是文件夹 / git / npm
+    var looksPath = /^[a-zA-Z]:[\\/]/.test(src) || /^[\\/]/.test(src) || src.indexOf('\\\\') !== -1 || /^\.\.?[\\/]/.test(src) || /^(file|link):/i.test(src)
+    var looksNpm = /^(@[a-z0-9-~][a-z0-9-._~]*\\/)?[a-z0-9-~][a-z0-9-._~]*$/i.test(src)
+    if (!looksPath && !looksLikeGitSource(src) && !looksNpm) {
+      log('err', '✘ 无法识别的安装源：' + src + '（要装本地文件请清空地址栏，用「安装 dsh 包」按钮选文件）')
+      return
+    }
+    var profile = $('iprofile').value.trim() || 'web'
+    setInstalling(true)
+    doInstall(src, 'auto', profile, src, function () { setInstalling(false) })
+  }
+  $('ipathPick').onclick = function () {
+    if (installBusy) return
+    pickInto('ipath', function () { setCache('ipath', $('ipath').value) })
+  }
+  $('ipath').onkeydown = function (e) { if ((e.key === 'Enter' || e.keyCode === 13) && !installBusy) $('ibtn').click() }
   $('ifile').onchange = function () {
     var f = $('ifile').files[0]; if (!f) return
     $('ifile').value = ''
@@ -362,9 +401,9 @@ ${head}
           if (!(d.ok && d.path)) { log('err', '✘ ' + (d.message || JSON.stringify(d))); setInstalling(false); return }
           log('ok', '✔ 已载入 → ' + d.path)
           log('step', '▸ 安装到 profile ' + profile + ' …（需批准提升权限）')
-          return fetch(API + '/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: d.path, profile: profile }) })
+          return fetch(API + '/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: d.path, sourceKind: 'file', profile: profile }) })
             .then(function (r2) { return r2.json() })
-            .then(function (i) { log(i.ok ? 'ok' : 'err', (i.ok ? '✔ ' : '✘ ') + (i.ok ? i.note : (i.message || JSON.stringify(i)))); setInstalling(false) })
+            .then(function (i) { renderInstallResult(i); setInstalling(false) })
         })
         .catch(function (e) { log('err', '✘ ' + e.message); setInstalling(false) })
     }
@@ -411,6 +450,7 @@ ${head}
       applyActiveProfile(d)
       if (!d.outDir && $('outDir').value === '') $('outDir').value = d.defaultOutDir || ''
       if (d.defaultOutDir) { if (!getCache('outDir')) setCache('outDir', d.defaultOutDir); if (!getCache('ipath')) setCache('ipath', d.defaultOutDir) }
+      if ($('ipath').value === '' && getCache('ipath')) $('ipath').value = getCache('ipath')
       if (!d.available) { $('hint').textContent = d.reason || '不可用'; $('list').textContent = ''; return }
       var ps = d.plugins || []
       $('hint').textContent = ps.length ? '共 ' + ps.length + ' 个会话级插件' : '当前没有会话级动态插件'
@@ -633,7 +673,7 @@ ${head}
     res.onclick = function () { setResident(pid, pkgVal, !entry.resident) }
     rest.onclick = function () { restoreOne(pid) }
     copy.onclick = function () { copyInfo(pid) }
-    // 一行四个：运行 / 常驻 / 恢复 / 复制。
+    // 2×2：运行 / 常驻 在上，恢复 / 复制 在下。
     actions.appendChild(runb); actions.appendChild(res); actions.appendChild(rest); actions.appendChild(copy)
     card.appendChild(star); card.appendChild(nm); card.appendChild(idc); card.appendChild(sel); card.appendChild(actions)
     return card

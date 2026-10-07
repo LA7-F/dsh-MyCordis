@@ -75,6 +75,7 @@ async function handleRequest(ctx, req, res) {
     if (path === '/api/install' && req.method === 'POST') {
       let body
       try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      // path 与 source 等价：path 是上传 .tgz 的落盘路径（旧面板），source 是「文件夹 / git 仓库 / npm 包名 / .tgz」安装源。
       try { send(res, 200, await installBundle(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
