@@ -44,18 +44,19 @@ nav{display:flex;gap:4px;padding:8px 10px;background:var(--panel);border-bottom:
 nav button{height:32px;padding:0 14px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--fg2);font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,box-shadow .15s}
 nav button:hover{background:var(--panel2);color:var(--fg)}
 nav button.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;box-shadow:0 1px 3px rgba(59,124,246,.32)}
-/* ── 版面 ── */
-main{padding:12px;max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
-.view{display:flex;flex-direction:column;gap:10px}
-.box{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:12px}
-.box>.section:first-child{margin-top:0}
-.section{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12.5px;font-weight:600;color:var(--fg);margin:14px 0 6px}
+/* ── 版面：全页一个节奏（main 间距 12 / box 内边距 13×14 / section 上 16 下 8） ── */
+main{padding:14px;max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.view{display:flex;flex-direction:column;gap:12px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:13px 14px}
+.box>*:first-child{margin-top:0}
+.box>*:last-child{margin-bottom:0}
+.section{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12.5px;font-weight:600;color:var(--fg);margin:16px 0 8px}
 .section::before{content:"";flex:none;width:3px;height:13px;border-radius:2px;background:var(--accent)}
 .section .hint{font-weight:400}
 .desc{font-size:11.5px;line-height:1.7;color:var(--fg2);margin:0 0 8px}
 .desc b{color:var(--fg);font-weight:600}
 /* 长说明默认折叠：面板只有 560~680px 宽，整段文字会把真正要操作的东西挤下去 */
-.note{background:var(--panel2);border:1px solid var(--line2);border-radius:var(--r2);margin:0 0 9px;padding:0 10px}
+.note{background:var(--panel2);border:1px solid var(--line2);border-radius:var(--r2);margin:0 0 10px;padding:0 10px}
 .note>summary{display:flex;align-items:center;gap:6px;padding:7px 0;font-size:11.5px;color:var(--muted);cursor:pointer;list-style:none;user-select:none}
 .note>summary::-webkit-details-marker{display:none}
 .note>summary::before{content:"▸";font-size:10px;transition:transform .15s}
@@ -75,22 +76,44 @@ input[type=text]:focus,select:focus{outline:none;border-color:var(--accent);box-
 .btn.danger:hover:not(:disabled){background:var(--err);border-color:var(--err);color:#fff}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .row{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
-.row input[type=text]{flex:1;min-width:120px}
+.row input[type=text],.fieldbar>input[type=text]{flex:1;min-width:120px}
+.row .spacer,.fieldbar .spacer{flex:1;min-width:0}
 .chk{display:inline-flex;align-items:center;gap:5px;height:30px;font-size:12px;color:var(--fg2);white-space:nowrap;flex:none;cursor:pointer;user-select:none}
 .chk input{margin:0;accent-color:var(--accent)}
 .hint{color:var(--muted);font-size:11.5px}
 .ok{color:var(--ok)}.err{color:var(--err)}.warn{color:var(--warn)}
+code{font-family:var(--mono);font-size:.92em;padding:0 4px;border-radius:4px;background:var(--panel3);color:var(--fg2)}
+/* ── 安装源：字段 + 类型图例 + 动作条 ── */
+.srcbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:7px 0 0}
+.chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--muted);font-size:10.5px;line-height:1;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.chip.on{background:var(--accent-weak);border-color:var(--accent-line);color:var(--accent);font-weight:600}
+.srckind{margin-left:auto;min-width:0;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srckind.on{color:var(--accent)}.srckind.bad{color:var(--err)}
+.fieldbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:9px 0 0}
+.fieldbar .spacer{flex:1;min-width:0}
+.box.drop{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak)}
+/* ── 「选择文件」：一枚按钮收两个入口（文件夹 / 安装包），点开是一个小下拉 ── */
+.pickspot{position:relative;flex:none;display:inline-flex}
+.btn .caret{display:block;width:0;height:0;margin-left:5px;border-left:3.5px solid transparent;border-right:3.5px solid transparent;border-top:4.5px solid currentColor;opacity:.75}
+.popmenu{position:absolute;top:calc(100% + 4px);right:0;z-index:8;min-width:216px;padding:4px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel);box-shadow:0 6px 20px rgba(16,24,40,.18);display:flex;flex-direction:column;gap:2px}
+.pmi{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;padding:6px 9px;border:1px solid transparent;border-radius:var(--r3);background:none;color:var(--fg);font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+.pmi:hover:not(:disabled){background:var(--accent-weak);border-color:var(--accent-line);color:var(--accent)}
+.pmi:disabled{opacity:.45;cursor:not-allowed}
+.pmi-sub{font-size:10.5px;color:var(--muted)}
+.pmi:hover:not(:disabled) .pmi-sub{color:inherit;opacity:.85}
 /* ── 列表 ── */
 ul{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel);max-height:340px;overflow:auto;overscroll-behavior:contain}
 .table{border:1px solid var(--line);border-radius:var(--r2);background:var(--panel);overflow:hidden}
 .table ul{border:none;border-radius:0;max-height:300px}
 .ellipsis{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.grid{display:grid;grid-template-columns:22px minmax(0,1fr) 96px 118px 58px;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line2);font-size:12.5px;min-width:0}
+.grid{display:grid;grid-template-columns:22px minmax(0,1fr) 76px 196px 54px;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line2);font-size:12.5px;min-width:0}
 .grid:last-child{border-bottom:none}
 .grid:not(.head):hover{background:var(--panel2)}
 .grid.head{position:sticky;top:0;z-index:1;background:var(--panel);font-size:10.5px;color:var(--muted);letter-spacing:.03em;border-bottom:1px solid var(--line)}
+.grid.head .chk{height:auto}
 .grid input[type=checkbox]{margin:0;accent-color:var(--accent)}
-.grid select{height:26px;font-size:12px}
+.grid select{height:26px;font-size:11.5px}
+.grid .mini{height:26px}
 .name{font-weight:600;font-size:12.5px}
 .id{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
 .grid .mini{height:24px;padding:0 8px;border:1px solid var(--line);border-radius:var(--r3);background:var(--panel2);color:var(--fg2);font:inherit;font-size:11px;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
@@ -106,13 +129,13 @@ ul{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius
 .mitem .mono.link{color:var(--fg2)}
 .mitem.loading,.mitem.fail{color:var(--muted);justify-content:center;font-size:12px}
 .mitem.fail{color:var(--err)}
-.tag{display:inline-flex;align-items:center;flex:none;height:16px;padding:0 6px;border:1px solid transparent;border-radius:999px;background:var(--panel3);color:var(--muted);font-size:10px;line-height:1;white-space:nowrap}
+.tag{display:inline-flex;align-items:center;flex:none;height:17px;padding:0 7px;border:1px solid transparent;border-radius:999px;background:var(--panel3);color:var(--muted);font-size:10px;line-height:1;white-space:nowrap}
 .tag.bundle{background:var(--accent-weak);border-color:var(--accent-line);color:var(--accent)}
 .tag.self{background:var(--warn-weak);border-color:var(--warn-line);color:var(--warn)}
 .tag.miss{background:var(--err-weak);border-color:var(--err-line);color:var(--err)}
 /* ── 插件卡片 ── */
 /* auto-fill（不是 auto-fit）：卡片只有一两张时也保持一行的等宽小卡，不会被拉成大块 */
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .card{min-height:152px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel);padding:8px;display:flex;flex-direction:column;gap:5px;position:relative;min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}
 .card:hover{border-color:var(--accent-line);box-shadow:var(--shadow)}
 .card .star{position:absolute;top:4px;right:4px;width:22px;height:22px;background:none;border:none;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;color:#d4a017;padding:0}
@@ -128,8 +151,11 @@ ul{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius
 .card .cactions .resbtn.on{background:var(--accent-weak);border-color:var(--accent-line);color:var(--accent);font-weight:600}
 .card .cactions .runbtn{background:var(--ok-weak);border-color:var(--ok-line);color:var(--ok);font-weight:600}
 .card .cactions .runbtn:hover:not(:disabled){border-color:var(--ok);color:var(--ok)}
-.empty{grid-column:1/-1;color:var(--muted);font-size:12px;padding:18px 12px;text-align:center}
-li.empty{display:block}
+.empty{grid-column:1/-1;color:var(--muted);font-size:12px;padding:22px 12px;text-align:center;border:1px dashed var(--line);border-radius:var(--r2);background:var(--panel2)}
+/* 计数胶囊：跟着 section 标题走，空值自动隐藏 */
+.count{display:inline-flex;align-items:center;justify-content:center;flex:none;height:17px;min-width:17px;padding:0 6px;border-radius:999px;background:var(--panel3);color:var(--fg2);font-size:10.5px;font-weight:600;line-height:1}
+.count:empty{display:none}
+li.empty{display:block;border:none;background:transparent}
 /* ── 底部运行日志：空则折叠，出结果自动展开 ── */
 .console{position:sticky;bottom:0;z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 -2px 12px rgba(16,24,40,.07);overflow:hidden}
 .console-hd{display:flex;align-items:center;background:var(--panel2);border-bottom:1px solid transparent}
@@ -157,65 +183,77 @@ ${head}
 <main>
 <div id="viewPack" class="view">
   <div class="box">
-    <label for="outDir">放置目录（打包产物输出目录）</label>
-    <div class="row"><input id="outDir" type="text" spellcheck="false" placeholder="选择或粘贴打包产物输出目录"><button id="browse" class="btn">浏览…</button><button id="refresh" class="btn">刷新列表</button></div>
+    <div class="section">产物放置目录<span class="tag">打包与导出都落在这里</span></div>
+    <div class="fieldbar" style="margin-top:0"><input id="outDir" type="text" spellcheck="false" placeholder="选择或粘贴打包产物输出目录"><button id="browse" class="btn">浏览…</button><button id="refresh" class="btn">刷新列表</button></div>
   </div>
   <div class="box">
-    <div class="section">会话级动态插件</div>
+    <div class="section">会话级动态插件<span class="tag">会话级 · 仅当前 dsh 进程</span></div>
     <label for="ptype">打包类型（勾选插件后一键打包，或点每行「打包」单打）</label>
-    <div class="row">
-      <select id="ptype" style="flex:1;min-width:180px"><option value="dsh">dsh 包（.tgz，真实安装）</option><option value="portable">便携包（host + client 完整定义）</option><option value="whole">整包（dsh 安装包 + 便携包）</option></select>
+    <div class="row" style="margin-top:0">
+      <select id="ptype" style="flex:1;min-width:170px"><option value="dsh">dsh 包（.tgz，真实安装）</option><option value="portable">便携包（host + client 完整定义）</option><option value="whole">整包（dsh 安装包 + 便携包）</option></select>
       <label class="chk" title="便携包默认把 host 与 client 半区一起导出，导入别的会话/机器后插件 UI 同样能复现；勾上则只留 host 半区（更小，但带 client UI 的插件会丢失界面）。"><input type="checkbox" id="ppure">仅 host 半区</label>
-      <label class="chk"><input type="checkbox" id="all">全选</label>
       <button id="batch" class="btn primary">一键打包</button>
     </div>
     <div id="hint" class="hint" style="margin:8px 0 6px"></div>
     <div class="table">
-      <div class="grid head"><span></span><span>插件名</span><span>插件 ID</span><span>版本</span><span>操作</span></div>
+      <div class="grid head"><label class="chk" title="全选 / 取消全选"><input type="checkbox" id="all"></label><span>插件名</span><span>插件 ID</span><span>版本</span><span>操作</span></div>
+      <ul id="list"></ul>
+    </div>
       <ul id="list"></ul>
     </div>
   </div>
 </div>
 <div id="viewInst" class="view" hidden>
   <div class="box">
-    <div class="section">① 安装 dsh 包（真实安装，重启 dsh 生效）</div>
-    <div class="desc">选择 .tgz 文件，自动上传并安装（等价于 dsh plugin add），需批准提升权限。</div>
-    <div class="row"><input id="ifile" type="file" accept=".tgz,.dshplugin,application/gzip" style="display:none"><input id="ipath" type="text" spellcheck="false" placeholder="未压缩文件夹路径 或 git 仓库地址（owner/repo、https://…、git+https://…）"><button id="ipathPick" class="btn">选择文件夹…</button><input id="iprofile" type="text" value="web" placeholder="profile（默认 web）" style="flex:none;width:130px"><button id="ibtn" class="btn primary">安装 dsh 包</button></div>
-    <div class="desc" style="margin:8px 0 0">地址栏支持：<b>未压缩文件夹</b>（如 <code>E:\\harness\\dsh-MyCordis</code>，需其 package.json 的 name 是合法 npm 包名）、<b>git 仓库</b>（<code>owner/repo</code> 简写按 GitHub 展开，也可直接写 <code>https://gitee.com/…</code> / <code>git+https://…</code>）、<b>npm 包名</b>（如 <code>dsh-mycordis</code>、<code>@scope/name</code>）、<b>本地 .tgz / .dshplugin 文件</b>；不定时按「先看路径是否真实存在、再按 git / npm 解析」自动判定。「选择文件夹…」调 DSH 原生目录选择器填入路径，点「安装 dsh 包」即按该路径安装（等价于 <code>dsh plugin add</code>，重启后生效）。</div>
+    <div class="section">① 安装 dsh 包<span class="tag">真实安装 · 重启 dsh 生效</span></div>
+    <details class="note"><summary>支持哪些安装源、装到哪、注意什么</summary>
+      <div class="desc"><b>自动判定顺序</b>：显式前缀（<code>file:</code> / <code>link:</code> / <code>git+</code> / <code>git@</code>）→ 磁盘上真实存在的路径（目录 = 文件夹安装，文件 = 安装包）→ git 地址 → 其余按 npm 包名 / 远程 URL。<br>
+      · <b>未压缩文件夹</b>：如 <code>E:\\harness\\dsh-MyCordis</code>，其 <code>package.json</code> 的 <code>name</code> 必须是合法 npm 包名（小写字母 / 数字 / <code>-._</code>）。<br>
+      · <b>git 仓库</b>：<code>owner/repo</code>（按 GitHub 展开）、<code>https://gitee.com/…</code>、<code>git+https://…</code>、<code>git@host:owner/repo.git</code>；机器上要能访问该仓库并装有 git。<br>
+      · <b>npm 包名</b>：<code>dsh-mycordis</code>、<code>@scope/name</code>，也支持带版本号（<code>dsh-mycordis@0.1.1</code>）。<br>
+      · <b>本地安装包</b>：地址栏填 <code>.tgz</code> 路径，或点「选择文件」→「安装包…」上传、把文件拖进本框（上限 50MB）。<br>
+      安装等价于 <code>dsh plugin add</code>，<b>需批准提升权限</b>，写进<b>当前部署那个 profile</b>（<code>$DSH_HOME/profiles/&lt;当前 profile&gt;</code>，面板不再让你选；目标 profile 名会写在下面的运行日志里），<b>重启 dsh 后生效</b>；当前部署就是 <code>desktop</code> 时必须先完全退出桌面版。</div>
+    </details>
+    <label for="ipath">安装源</label>
+    <div class="row" style="margin-top:0"><input id="ifile" type="file" accept=".tgz,.dshplugin,application/gzip" style="display:none"><input id="ipath" type="text" spellcheck="false" placeholder="粘贴路径 / git 仓库 / npm 包名" title="未压缩文件夹 / git 仓库地址 / npm 包名都可以；也可以把 .tgz 文件直接拖进本框（上限 50MB）"><span class="pickspot"><button id="ipick" class="btn" type="button" aria-haspopup="true" aria-expanded="false" title="挑本机要安装的东西：未压缩文件夹，或 .tgz / .dshplugin 安装包">选择文件<span class="caret"></span></button><div id="ipickMenu" class="popmenu" hidden role="menu"><button id="ipathPick" class="pmi" type="button" role="menuitem" title="用 DSH 原生目录选择器挑一个未压缩文件夹（目录里要有合法的 package.json）">文件夹…<span class="pmi-sub">未压缩的插件目录</span></button><button id="ifilebtn" class="pmi" type="button" role="menuitem" title="挑一个本地 .tgz / .dshplugin 上传安装（上限 50MB）">安装包…<span class="pmi-sub">.tgz / .dshplugin，上限 50MB</span></button></div></span><button id="ibtn" class="btn primary">安装</button></div>
+    <div class="srcbar"><span class="chip" data-kind="local-dir">文件夹</span><span class="chip" data-kind="git">git 仓库</span><span class="chip" data-kind="npm">npm 包</span><span class="chip" data-kind="local-file">.tgz 文件</span><span id="isrcKind" class="srckind"></span></div>
   </div>
   <div class="box">
-    <div class="section">② 导入便携包（注册为临时插件，非真实安装）</div>
+    <div class="section">② 导入便携包<span class="tag">临时插件 · 不写 profile</span></div>
     <details class="note"><summary>说明与注意事项</summary>
       <div class="desc">⚠ 导入会在 dsh 进程内执行包内代码，请只导入可信来源的文件。<b>两种文件都不安装</b>：不写 $DSH_HOME/profiles、不用选 profile、不用重启 dsh，只在当前进程注册为临时插件（重启即消失），一个文件一个插件。<br>· <b>.tgz</b>（dsh 包，推荐）：自动用系统 tar 解到工作区临时目录，取包内 host.js + client.js；<br>· <b>.dshplugin.json</b>（便携定义，旧格式）：直接给 host + client 两个半区。<br>导入后默认自动运行，且<b>一律走零唤醒通道</b>：host 半静默启动（<b>不唤醒会话、不花 token</b>）；带 client 半区的包停在「待页面装入」，去 DSH 侧边栏的 Cordis 面板点「运行」把 client 半装入本页（那条结算用 agent.inject，只注入一条上下文、同样不唤醒）。多会话并存时先用左侧「会话…」下拉选所属会话：选项按「历史对话标题 - 会话id」展示（能自动解析或只有一个存活会话时会预选，否则手填 id）。</div>
     </details>
-    <div class="row"><select id="xsessSel" style="flex:none;width:190px" title="选择所属会话（多会话并存时必选；选中即回填右侧 id）"></select><input id="xsess" type="text" placeholder="所属会话 id（可空）"><input id="xfile" type="file" accept=".tgz,.json,.dshplugin.json,.dshplugin,application/gzip" style="display:none"><label class="chk"><input type="checkbox" id="xauto" checked>导入后自动运行</label><button id="xbtn" class="btn primary">导入便携包</button></div>
+    <label for="xsess">所属会话（多会话并存时必选；左侧下拉选中即回填右侧 id）</label>
+    <div class="row" style="margin-top:0"><input id="xfile" type="file" accept=".tgz,.json,.dshplugin.json,.dshplugin,application/gzip" style="display:none"><select id="xsessSel" style="flex:none;width:200px" title="选择所属会话（多会话并存时必选；选中即回填右侧 id）"></select><input id="xsess" type="text" spellcheck="false" placeholder="所属会话 id（可空）"></div>
+    <div class="fieldbar"><label class="chk"><input type="checkbox" id="xauto" checked>导入后自动运行</label><span class="spacer"></span><button id="xbtn" class="btn primary">导入便携包</button></div>
   </div>
 </div>
 <div id="viewMgmt" class="view" hidden>
   <div class="box">
-    <div class="section">① 已安装 dsh 插件（常驻，重启生效）<span class="hint" id="instCount"></span></div>
+    <div class="section">已安装 dsh 插件<span class="tag">常驻 · 重启生效</span><span id="instProfile" class="tag"></span><span id="instCount" class="count"></span><button id="mrefresh" class="btn" style="margin-left:auto;height:26px;padding:0 10px;font-size:11.5px">刷新</button></div>
     <details class="note"><summary>说明与注意事项</summary>
-      <div class="desc">以 dsh.profile.bundles 为基准并集 dependencies（用户装的排前面，基础层沉底）；profile 按当前部署自动回填（可手改）；只有基础包不可卸载；卸载需批准提升权限，重启 dsh 生效。注意 profile=desktop 必须先完全退出桌面版，否则会被 package.json.lock 挡住。</div>
+      <div class="desc">以 dsh.profile.bundles 为基准并集 dependencies（用户装的排前面，基础层沉底）；profile 固定用<b>当前部署</b>那个（面板不再让你选，名字显示在标题行）；每行可<b>导出</b>（把 profile 里装好的那一份打成安装包 / 便携包）或卸载，只有基础包两样都不可行；导出读的是 $DSH_HOME 下该 profile 的包目录，卸载需批准提升权限、重启 dsh 生效。注意 profile=desktop 必须先完全退出桌面版，否则会被 package.json.lock 挡住。</div>
     </details>
-    <div class="row" style="margin-top:0"><input id="mprofile" type="text" value="web" placeholder="profile（默认 web）"><button id="mrefresh" class="btn">刷新</button></div>
+    <label for="moutDir">导出到</label>
+    <div class="row" style="margin-top:0"><input id="moutDir" type="text" spellcheck="false" placeholder="导出放置目录（缺省 = 工作区 packer2-out）"><button id="mbrowse" class="btn">浏览…</button><select id="mfmt" style="flex:none;width:180px" title="导出格式：dsh 安装包（.tgz）可直接「安装 dsh 包」；便携包（.dshplugin.json）可「导入便携包」到别的会话；整包两者都要，一插件一子文件夹"><option value="tgz">dsh 安装包（.tgz）</option><option value="portable">便携包（host + client）</option><option value="whole">整包（.tgz + 便携包）</option></select><button id="mexportAll" class="btn primary">一键导出全部</button></div>
     <ul id="instList" style="margin-top:10px"></ul>
   </div>
 </div>
 <div id="viewTemp" class="view" hidden>
   <div class="box">
-    <div class="section">① 临时插件（会话级，仅当前 dsh 进程）</div>
+    <div class="section">临时插件<span class="tag">会话级 · 仅当前 dsh 进程</span></div>
     <details class="note"><summary>说明与注意事项</summary>
       <div class="desc">来自「安装 → 导入便携包」的 .dshplugin.json：只在当前进程内注册，重启 dsh 即消失；常驻/收藏才会跨重启保留。☆ 收藏（仅显示卡片，不自动运行）/ 常驻（收藏 + 重启自动运行）/ 恢复（启动）/ 复制 / 同名合并版本。<br>token：运行<b>默认走零唤醒通道</b>（runHostHalf(requestId=null)，面板手势）——host 半静默启动，<b>不唤醒任何会话轮次</b>；带 client 半区的包停在「待页面装入」，去 DSH 侧边栏的 Cordis 面板点「运行」装入本页（settleUserRun → agent.inject，只注入一条上下文、不唤醒）。只有勾选「允许唤醒会话」才会退回会 agent.steer 的旧通道。</div>
     </details>
-    <div class="row" style="margin-top:0"><button id="frestore" class="btn primary">恢复收藏</button><button id="dedupe" class="btn">去重</button><label class="chk" title="应急开关：退回 run() 请求通道，结算走 agent.steer（唤醒一轮、花 token）。零唤醒通道可用时不要勾。"><input type="checkbox" id="wakeok">允许唤醒会话（应急）</label></div>
+    <div class="fieldbar" style="margin-top:0"><button id="frestore" class="btn primary">恢复收藏</button><button id="dedupe" class="btn">去重</button><span class="spacer"></span><label class="chk" title="应急开关：退回 run() 请求通道，结算走 agent.steer（唤醒一轮、花 token）。零唤醒通道可用时不要勾。"><input type="checkbox" id="wakeok">允许唤醒会话（应急）</label></div>
   </div>
   <div class="box">
-    <div class="section">①-1 已收藏 <span class="hint" id="favCount"></span></div>
+    <div class="section">已收藏<span id="favCount" class="count"></span></div>
     <div class="desc">来自收藏记录 packer2-favorites.json，重启后仍显示卡片；点 ★ 取消收藏会移入下方「未收藏」，下次重启消失。</div>
     <div id="favCards" class="cards"></div>
   </div>
   <div class="box">
-    <div class="section">①-2 未收藏 <span class="hint" id="unfavCount"></span></div>
+    <div class="section">未收藏<span id="unfavCount" class="count"></span></div>
     <div class="desc">当前会话新建/导入且未收藏的插件；点 ☆ 收藏会移入上方「已收藏」，下次重启依旧存在。</div>
     <div id="unfavCards" class="cards"></div>
   </div>
@@ -343,10 +381,44 @@ ${head}
   function setInstalling(on) {
     installBusy = on
     $('ibtn').disabled = on
-    $('ibtn').textContent = on ? '安装中…' : '安装 dsh 包'
+    $('ibtn').textContent = on ? '安装中…' : '安装'
+    // 忙的时候连「选择文件」和它下面两个入口一起锁上，避免安装途中再弹一个系统对话框。
+    $('ipick').disabled = on
+    $('ipathPick').disabled = on
+    $('ifilebtn').disabled = on
+    if (on) closePickMenu()
   }
   function looksLikeGitSource(s) {
     return /^git[+:]|^git@/i.test(s) || /^[a-z][a-z0-9+.-]*:\/\//i.test(s) || /^[\w.-]+\/[\w.-]+(?:\.git)?$/.test(s)
+  }
+  // 前端粗判安装源类型：只用来点亮图例与提示，**不参与提交**——真正的判定在 host 半区
+  // （disk 上是否真实存在只有那边知道），所以这里宁可判不准也不要去猜。
+  var SRC_KIND_TEXT = { 'local-dir': '未压缩文件夹', git: 'git 仓库', npm: 'npm 包', 'local-file': '本地安装包' }
+  function guessSourceKind(s) {
+    if (s === '') return ''
+    var isPkgFile = /\\.(tgz|dshplugin)$/i.test(s)
+    var looksPath = /^[a-zA-Z]:[\\/]/.test(s) || /^[\\/]/.test(s) || s.indexOf('\\\\') !== -1 || /^\\.\\.?[\\/]/.test(s) || /^(file|link):/i.test(s)
+    if (looksPath) return isPkgFile ? 'local-file' : 'local-dir'
+    if (/^git[+:]|^git@/i.test(s)) return 'git'
+    if (/^https?:\\/\\//i.test(s)) {
+      // 已知 git 托管站、或以 .git 结尾 → git；其余 https（含 npm tarball 直链）交给 npm。
+      if (/(^|\\/\\/)(github|gitlab|gitee|bitbucket|codeberg)\\./i.test(s) || /\\.git$/i.test(s)) return 'git'
+      return 'npm'
+    }
+    if (/^[\\w.-]+\\/[\\w.-]+$/.test(s)) return 'git'
+    if (/^(@[a-z0-9-~][a-z0-9-._~]*\\/)?[a-z0-9-~][a-z0-9-._~]*(@[\\w.\\-+]+)?$/i.test(s)) return 'npm'
+    return ''
+  }
+  // 图例同时充当状态灯：命中的那一枚点亮 + 右侧给一句人话；地址栏为空时提示还能拖文件。
+  function refreshSourceKind() {
+    var s = $('ipath').value.trim()
+    var k = guessSourceKind(s)
+    var chips = document.querySelectorAll('#viewInst .chip')
+    for (var i = 0; i < chips.length; i += 1) chips[i].className = 'chip' + (chips[i].getAttribute('data-kind') === k ? ' on' : '')
+    var el = $('isrcKind')
+    if (s === '') { el.className = 'srckind'; el.textContent = '可点「选择文件」挑文件夹 / 安装包，也可拖入 .tgz'; return }
+    if (k === '') { el.className = 'srckind bad'; el.textContent = '无法识别，检查一下写法'; return }
+    el.className = 'srckind on'; el.textContent = '识别为 ' + SRC_KIND_TEXT[k]
   }
   // 地址栏有内容 → 按安装源（文件夹 / git / npm）安装；地址栏为空 → 走文件选择上传 .tgz。
   function readInstallSource() { return { source: $('ipath').value.trim() } }
@@ -356,10 +428,10 @@ ${head}
     var detail = (d && d.detail) ? '（' + d.detail + '）' : ''
     log(good ? 'ok' : 'err', (good ? '✔ ' : '✘ ') + ((d && (d.note || d.message)) || JSON.stringify(d)) + (good ? detail : ''))
   }
-  function doInstall(source, kind, profile, label, done) {
+  function doInstall(source, kind, label, done) {
     clearLog()
-    log('step', '▸ 安装 ' + label + ' → profile ' + profile + ' …（需批准提升权限）')
-    fetch(API + '/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: source, sourceKind: kind, profile: profile }) })
+    log('step', '▸ 安装 ' + label + ' → 当前部署的 profile（后端解析，需批准提升权限）…')
+    fetch(API + '/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: source, sourceKind: kind }) })
       .then(function (r) { return r.json() })
       .then(function (d) { renderInstallResult(d); done(false) })
       .catch(function (e) { log('err', '✘ ' + e.message); done(false) })
@@ -367,27 +439,56 @@ ${head}
   $('ibtn').onclick = function () {
     if (installBusy) return
     var src = readInstallSource().source
-    if (src === '') { $('ifile').click(); return } // 地址栏为空=上传 .tgz 安装；填了就是文件夹 / git / npm
+    // 地址栏为空：以前这里直接弹文件选择器，但按钮字面是「安装」，弹框会让人以为点错了。
+    // 现在说清两条入口，并把焦点交回地址栏。
+    if (src === '') {
+      log('warn', '⚠ 请先填写安装源；要装本地文件请点「选择文件」→「安装包…」，或把 .tgz 拖进本框')
+      $('ipath').focus()
+      return
+    }
     var looksPath = /^[a-zA-Z]:[\\/]/.test(src) || /^[\\/]/.test(src) || src.indexOf('\\\\') !== -1 || /^\.\.?[\\/]/.test(src) || /^(file|link):/i.test(src)
     var looksNpm = /^(@[a-z0-9-~][a-z0-9-._~]*\\/)?[a-z0-9-~][a-z0-9-._~]*$/i.test(src)
     if (!looksPath && !looksLikeGitSource(src) && !looksNpm) {
-      log('err', '✘ 无法识别的安装源：' + src + '（要装本地文件请清空地址栏，用「安装 dsh 包」按钮选文件）')
+      log('err', '✘ 无法识别的安装源：' + src + '（本地文件请点「选择文件」→「安装包…」或直接拖入）')
       return
     }
-    var profile = $('iprofile').value.trim() || 'web'
     setInstalling(true)
-    doInstall(src, 'auto', profile, src, function () { setInstalling(false) })
+    doInstall(src, 'auto', src, function () { setInstalling(false) })
+  }
+  // ① 只有一个「选择文件」：文件夹（DSH 原生目录选择器）与安装包（浏览器文件选择）是两种
+  // 互斥的交互，系统的一个打开对话框没法一次选完，所以收进这枚按钮下面的两行小下拉。
+  function closePickMenu() {
+    var m = $('ipickMenu')
+    if (m && !m.hidden) m.hidden = true
+    if ($('ipick')) $('ipick').setAttribute('aria-expanded', 'false')
+  }
+  $('ipick').onclick = function (e) {
+    if (installBusy) return
+    // 别让这次点击冒泡到下面的 document 监听（否则菜单刚开就被自己关掉）。
+    if (e && e.stopPropagation) e.stopPropagation()
+    var m = $('ipickMenu')
+    if (m.hidden) { m.hidden = false; $('ipick').setAttribute('aria-expanded', 'true') } else closePickMenu()
   }
   $('ipathPick').onclick = function () {
     if (installBusy) return
-    pickInto('ipath', function () { setCache('ipath', $('ipath').value) })
+    closePickMenu()
+    pickInto('ipath', function () { setCache('ipath', $('ipath').value); refreshSourceKind() })
   }
+  $('ifilebtn').onclick = function () { if (installBusy) return; closePickMenu(); $('ifile').click() }
+  // 点别处 / 按 Esc 就把小下拉收起来，免得它留在屏幕上挡事。
+  document.addEventListener('click', function (e) {
+    var m = $('ipickMenu'); if (!m || m.hidden) return
+    var t = e.target
+    if (t && t.closest && t.closest('.pickspot')) return
+    closePickMenu()
+  })
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' || e.keyCode === 27) closePickMenu() })
   $('ipath').onkeydown = function (e) { if ((e.key === 'Enter' || e.keyCode === 13) && !installBusy) $('ibtn').click() }
-  $('ifile').onchange = function () {
-    var f = $('ifile').files[0]; if (!f) return
-    $('ifile').value = ''
+  $('ipath').oninput = refreshSourceKind
+  // .tgz / .dshplugin 上传安装：文件选择器、拖放共用同一条路径。
+  function installFromFile(f) {
+    if (!f || installBusy) return
     if (f.size > 50 * 1024 * 1024) { log('err', '✘ 文件过大（>50MB）'); return }
-    var profile = $('iprofile').value.trim() || 'web'
     setInstalling(true)
     var rd = new FileReader()
     rd.onload = function () {
@@ -400,8 +501,8 @@ ${head}
         .then(function (d) {
           if (!(d.ok && d.path)) { log('err', '✘ ' + (d.message || JSON.stringify(d))); setInstalling(false); return }
           log('ok', '✔ 已载入 → ' + d.path)
-          log('step', '▸ 安装到 profile ' + profile + ' …（需批准提升权限）')
-          return fetch(API + '/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: d.path, sourceKind: 'file', profile: profile }) })
+          log('step', '▸ 安装到当前部署的 profile（后端解析，需批准提升权限）…')
+          return fetch(API + '/install', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: d.path, sourceKind: 'file' }) })
             .then(function (r2) { return r2.json() })
             .then(function (i) { renderInstallResult(i); setInstalling(false) })
         })
@@ -410,17 +511,25 @@ ${head}
     rd.onerror = function () { log('err', '✘ 读取文件失败'); setInstalling(false) }
     rd.readAsDataURL(f)
   }
-  var profilePrefilled = false
-  // 只回填一次、且只覆盖写死的默认值 'web'/空值，避免踩掉用户手输的 profile。
-  function applyActiveProfile(d) {
-    if (profilePrefilled) return
-    profilePrefilled = true
-    var p = d && d.activeProfile
-    if (!p) return
-    ;['mprofile', 'iprofile'].forEach(function (id) {
-      var el = $(id)
-      if (el && (el.value === '' || el.value === 'web')) el.value = p
-    })
+  $('ifile').onchange = function () { var f = $('ifile').files[0]; $('ifile').value = ''; installFromFile(f) }
+  // 拖放：整块 ① 就是投放区，省掉「点按钮 → 在系统对话框里翻目录」那一步。
+  var dropBox = $('viewInst').querySelector('.box')
+  var dragDepth = 0
+  function dragHasFiles(e) { var t = e.dataTransfer; if (!t || !t.types) return false; for (var i = 0; i < t.types.length; i += 1) { if (t.types[i] === 'Files') return true } return false }
+  function setDrop(on) { if (dropBox) dropBox.className = on ? 'box drop' : 'box' }
+  if (dropBox) {
+    dropBox.addEventListener('dragenter', function (e) { if (!dragHasFiles(e)) return; e.preventDefault(); dragDepth += 1; setDrop(true) })
+    dropBox.addEventListener('dragover', function (e) { if (!dragHasFiles(e)) return; e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy' } catch (err) { /* 只是光标样式 */ } })
+    dropBox.addEventListener('dragleave', function (e) { if (!dragHasFiles(e)) return; dragDepth -= 1; if (dragDepth <= 0) { dragDepth = 0; setDrop(false) } })
+    dropBox.addEventListener('drop', function (e) { dragDepth = 0; setDrop(false); if (!dragHasFiles(e)) return; e.preventDefault(); installFromFile(e.dataTransfer.files && e.dataTransfer.files[0]) })
+  }
+  // 安装源默认留空：它是一次性动作的目标，把上次填的值一路留在框里（早期还会被塞进
+  // 「放置目录」当默认值）只会误导。缓存按宿主进程号作废——dsh 一重启就回到空。
+  function resetInstallSourceCacheOnNewBoot(bootId) {
+    var id = String(bootId || '')
+    if (id === '' || getCache('ipathBoot') === id) return
+    setCache('ipath', '')
+    setCache('ipathBoot', id)
   }
   // D2：拉取存活会话清单；服务端能自动解析就预选回填，多会话时由用户显式选。
   function loadSessions() {
@@ -447,10 +556,12 @@ ${head}
   function load() {
     loadSessions()
     fetch(API + '/plugins').then(function (r) { return r.json() }).then(function (d) {
-      applyActiveProfile(d)
       if (!d.outDir && $('outDir').value === '') $('outDir').value = d.defaultOutDir || ''
-      if (d.defaultOutDir) { if (!getCache('outDir')) setCache('outDir', d.defaultOutDir); if (!getCache('ipath')) setCache('ipath', d.defaultOutDir) }
+      if ($('moutDir').value === '') $('moutDir').value = getCache('moutDir') || d.defaultOutDir || ''
+      if (d.defaultOutDir) { if (!getCache('outDir')) setCache('outDir', d.defaultOutDir); if (!getCache('moutDir')) setCache('moutDir', d.defaultOutDir) }
+      resetInstallSourceCacheOnNewBoot(d.bootId)
       if ($('ipath').value === '' && getCache('ipath')) $('ipath').value = getCache('ipath')
+      refreshSourceKind()
       if (!d.available) { $('hint').textContent = d.reason || '不可用'; $('list').textContent = ''; return }
       var ps = d.plugins || []
       $('hint').textContent = ps.length ? '共 ' + ps.length + ' 个会话级插件' : '当前没有会话级动态插件'
@@ -463,7 +574,8 @@ ${head}
         var nm = document.createElement('b'); nm.className = 'name ellipsis'; nm.textContent = (pkgs.length ? (pkgs[pkgs.length-1].name || p.pluginId) : p.pluginId); nm.title = nm.textContent
         var idc = document.createElement('code'); idc.className = 'id ellipsis'; idc.textContent = p.pluginId; idc.title = p.pluginId
         var sel = document.createElement('select')
-        pkgs.forEach(function (pk) { var o = document.createElement('option'); o.value = pk.packageId; o.textContent = pk.packageId + (pk.packageId === cur ? ' (当前)' : ''); if (pk.packageId === cur) o.selected = true; sel.appendChild(o) })
+        sel.title = pkgs.length ? pkgs.map(function (pk) { return pk.packageId + (pk.packageId === cur ? ' (当前)' : '') }).join('\\n') : ''
+      pkgs.forEach(function (pk) { var o = document.createElement('option'); o.value = pk.packageId; o.textContent = pk.packageId + (pk.packageId === cur ? ' (当前)' : ''); if (pk.packageId === cur) o.selected = true; sel.appendChild(o) })
         var pb = document.createElement('button'); pb.className = 'mini'; pb.textContent = '打包'
         pb.onclick = (function (pid, selEl) { return function () { packOne(pid, selEl.value) } })(p.pluginId, sel)
         li.appendChild(chk); li.appendChild(nm); li.appendChild(idc); li.appendChild(sel); li.appendChild(pb)
@@ -530,6 +642,8 @@ ${head}
   }
   // ── 管理与卸载：profile 层的真实已装清单 ─────────────────────────────────
   var instSeq = 0
+  // 上一次读到的已装清单：给「一键导出全部」用（DOM 里再翻一遍不如留个引用稳）。
+  var instDeps = []
   function elEmpty(text, tag) { var d = document.createElement(tag || 'div'); d.className = 'empty'; d.textContent = text; return d }
   function chip(text, cls) { var t = document.createElement('span'); t.className = 'tag' + (cls ? ' ' + cls : ''); t.textContent = text; return t }
   // 路径来源太长会挤掉插件名，只留尾部（文件名最有用），完整值仍在 title 里。
@@ -539,20 +653,25 @@ ${head}
     return '…' + t.slice(-45)
   }
   function loadInstalled() {
-    var profile = $('mprofile').value.trim() || 'web'
+    // 面板不再让用户选 profile：请求不传，后端按「当前部署」解析并把结果回传（d.profile）。
+    var profile = ''
     var ul = $('instList'); var seq = ++instSeq
     var disarmers = []
     function disarmAll() { for (var i = 0; i < disarmers.length; i += 1) disarmers[i]() }
     ul.textContent = ''
     $('instCount').textContent = ''
+    $('instProfile').textContent = ''
     var loading = document.createElement('li'); loading.className = 'mitem loading'; loading.textContent = '读取中…'; ul.appendChild(loading)
-    fetch(API + '/installed?profile=' + encodeURIComponent(profile)).then(function (r) { return r.json() }).then(function (d) {
+    fetch(API + '/installed').then(function (r) { return r.json() }).then(function (d) {
       if (seq !== instSeq) return
+      profile = String((d && d.profile) || '')
+      $('instProfile').textContent = profile === '' ? '' : 'profile: ' + profile
       ul.textContent = ''
       if (d.error) { ul.appendChild(elEmpty('⚠ ' + d.error, 'li')); return }
       var deps = d.dependencies || []
-      $('instCount').textContent = deps.length ? '共 ' + deps.length + ' 项' : ''
-      if (!deps.length) { ul.appendChild(elEmpty('该 profile 下没有已安装的 dsh 插件', 'li')); return }
+      instDeps = deps
+      $('instCount').textContent = String(deps.length)
+      if (!deps.length) { ul.appendChild(elEmpty('当前 profile 下没有已安装的 dsh 插件', 'li')); return }
       deps.forEach(function (dep) {
         var li = document.createElement('li'); li.className = 'mitem'
         var main = document.createElement('div'); main.className = 'mi-main'
@@ -595,11 +714,17 @@ ${head}
           }
           disarm()
           log('step', '▸ 卸载 ' + dep.name + ' …（需批准提升权限）')
-          fetch(API + '/uninstall', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: dep.name, profile: profile }) })
+          fetch(API + '/uninstall', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: dep.name }) })
             .then(function (r) { return r.json() }).then(function (x) { log(x.ok ? 'ok' : 'err', (x.ok ? '✔ ' : '✘ ') + (x.ok ? x.note : (x.message || JSON.stringify(x)))); loadInstalled() })
             .catch(function (e) { log('err', '✘ ' + e.message) })
         }
-        li.appendChild(main); li.appendChild(btn)
+        var exb = document.createElement('button'); exb.className = 'btn'; exb.textContent = '导出'
+        exb.disabled = !!dep.isBase
+        exb.title = dep.isBase
+          ? '基础包由安装目录提供，不在该 profile 的 node_modules 里，无法导出'
+          : '导出「' + dep.name + '」：格式取上方下拉，产物落在上方放置目录'
+        exb.onclick = function () { exportInstalled([dep.name], dep.name) }
+        li.appendChild(main); li.appendChild(exb); li.appendChild(btn)
         ul.appendChild(li)
       })
     }).catch(function (e) {
@@ -623,6 +748,7 @@ ${head}
     var sel = null
     if (entry.packages && entry.packages.length) {
       sel = document.createElement('select')
+      sel.title = entry.packages.map(function (pk) { return pk.packageId + (pk.packageId === entry.currentPackageId ? ' (当前)' : '') }).join('\\n')
       entry.packages.forEach(function (pk) { var o = document.createElement('option'); o.value = pk.packageId; o.textContent = pk.packageId; if (pk.packageId === entry.currentPackageId) o.selected = true; sel.appendChild(o) })
     } else {
       sel = document.createElement('div'); sel.className = 'cid'; sel.textContent = entry.packageId || ''
@@ -705,7 +831,7 @@ ${head}
           }))
         })
       }
-      $('favCount').textContent = '（' + favs.length + '）'
+      $('favCount').textContent = String(favs.length)
       var names = favs.map(function (f) { return f.name })
       var unfav = ps.filter(function (p) { return names.indexOf(pname(p)) === -1 })
       if (unfav.length === 0) { ug.appendChild(elEmpty('当前没有未收藏的会话级插件')) }
@@ -714,7 +840,7 @@ ${head}
           ug.appendChild(buildCard({ isFav: false, pluginId: p.pluginId, packageId: p.currentPackageId, name: pname(p), resident: false, packages: p.packages, currentPackageId: p.currentPackageId, latestRun: p.latestRun }))
         })
       }
-      $('unfavCount').textContent = '（' + unfav.length + '）'
+      $('unfavCount').textContent = String(unfav.length)
     }).catch(function (e) { log('err', '✘ ' + e.message) })
   }
   function runStatusText(s) {
@@ -796,10 +922,45 @@ ${head}
       })
       .catch(function (e) { log('err', '✘ ' + e.message) })
   }
+  // ── 导出已安装插件：把 profile 里装好的那一份导出成安装包 / 便携包 ──────────
+  // 与「打包」页的区别：那边导出的是**会话级动态插件**，这边是**profile 里真实装好**的那一份
+  // （读 $DSH_HOME/profiles/<profile>/node_modules/<name>），所以不需要选版本，装的是哪个就导哪个。
+  function fmtText(v) { return v === 'portable' ? '便携包' : (v === 'whole' ? '整包（.tgz + 便携包）' : 'dsh 安装包（.tgz）') }
+  function exportInstalled(names, label) {
+    if (!names.length) { log('err', '✘ 没有可导出的插件（基础包由安装目录提供，不在 profile 的 node_modules 里）'); return }
+    var format = $('mfmt').value
+    var outDir = $('moutDir').value.trim()
+    setCache('moutDir', outDir)
+    clearLog()
+    log('step', '▸ 导出 ' + label + '（' + fmtText(format) + '，当前部署的 profile）…')
+    fetch(API + '/export-installed', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ format: format, outDir: outDir, plugins: names.map(function (n) { return { name: n } }) }) })
+      .then(function (r) { return r.json() })
+      .then(function (d) {
+        if (!d || d.ok !== true) { log('err', '✘ ' + ((d && d.message) || '导出失败')); return }
+        ;(d.results || []).forEach(function (x) {
+          if (!x || x.ok !== true) { log('err', '✘ ' + ((x && x.name) || '') + '：' + ((x && x.message) || '失败')); return }
+          var paths = []
+          if (x.tgzPath) paths.push(x.tgzPath)
+          if (x.portablePath) paths.push(x.portablePath)
+          if (paths.length) log('ok', '✔ ' + x.name + ' → ' + paths.join('  +  '))
+          else log('warn', '⚠ ' + x.name + '：这次没有产出任何文件')
+          // 整包：便携半区做不出来时 tgz 照样给，缺的那半说清楚原因（不整条判失败）。
+          if (x.portableError) log('warn', '⚠ ' + x.name + ' 的便携包没导出：' + x.portableError)
+        })
+      })
+      .catch(function (e) { log('err', '✘ 请求失败: ' + e.message) })
+  }
+  $('mexportAll').onclick = function () {
+    // 基础包（由安装目录提供）先在面板侧滤掉：后端也会拒绝，没必要把一次全导出变成一堆红字。
+    var names = []
+    for (var i = 0; i < instDeps.length; i += 1) if (!instDeps[i].isBase) names.push(instDeps[i].name)
+    exportInstalled(names, '全部已安装插件（' + names.length + ' 个）')
+  }
+  $('mbrowse').onclick = function () { pickInto('moutDir') }
   // 两个页签各管一半：管理与卸载 = profile 已装插件；临时插件 = 会话级动态插件（收藏/卡片）。
-  function loadMgmt() { if ($('mprofile').value.trim() === '') $('mprofile').value = 'web'; loadInstalled() }
+  function loadMgmt() { loadInstalled() }
   function loadTemp() { loadCards() }
-  $('mrefresh').onclick = function () { loadInstalled() }
+  $('mrefresh').onclick = loadInstalled
   $('frestore').onclick = function () {
     log('step', '▸ 恢复收藏（启动）…')
     fetch(API + '/restore-favorites', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })

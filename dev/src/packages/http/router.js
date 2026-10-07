@@ -15,7 +15,22 @@ async function handleRequest(ctx, req, res) {
     }
     if (path === '/api/plugins' && req.method === 'GET') {
       const d = listPlugins(ctx)
-      send(res, 200, { ...d, defaultOutDir: (await workspaceRoot(ctx)) + '/packer2-out', activeProfile: await activeProfile(ctx) })
+      send(res, 200, { ...d, defaultOutDir: (await workspaceRoot(ctx)) + '/packer2-out', activeProfile: await activeProfile(ctx), bootId: HOST_BOOT_ID })
+      return
+    }
+    if (path === '/api/profiles' && req.method === 'GET') {
+      // 面板的 profile 输入用它做下拉：列出 $DSH_HOME/profiles 下已有的名字。
+      // 手填一个不存在的名字也不算错——dsh plugin --profile <新名> 会自己初始化它。
+      try { send(res, 200, await listProfiles(ctx)) } catch (e) { send(res, 200, { ok: false, profiles: [], message: safeErrorMsg(e) }) }
+      return
+    }
+    if (path === '/api/profile-create' && req.method === 'POST') {
+      // 显式新建 profile（面板「新增 profile」）：dsh plugin --profile <新名> list 会把缺失的
+      // profile 初始化出来（CLI 帮助原文 initialized on first use），pnpm list 本身只读。
+      // 已存在时幂等返回 created:false——面板会先查 /api/profiles，正常不会走到这里。
+      let body
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { send(res, 200, await createProfile(ctx, String((body && body.name) || ''))) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/sessions' && req.method === 'GET') {
@@ -90,8 +105,15 @@ async function handleRequest(ctx, req, res) {
       try {
         u.query.split('&').forEach(function (kv) { const i = kv.indexOf('='); if (i > 0) qs[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)) })
       } catch (e) { send(res, 400, { ok: false, message: '查询参数不是合法编码' }); return }
-      const profile = String(qs.profile || 'web')
+      // 面板不传 profile：交给 installedPlugins 按「当前部署」解析（旧默认值 'web' 会把桌面版指错地方）。
+      const profile = String(qs.profile || '')
       try { send(res, 200, await installedPlugins(ctx, profile)) } catch (e) { send(res, 200, { profile, error: safeErrorMsg(e) }) }
+      return
+    }
+    if (path === '/api/export-installed' && req.method === 'POST') {
+      let body
+      try { body = JSON.parse(await readBody(req)) } catch (e) { if (String(e && e.message) === 'body-too-large') { send(res, 413, { ok: false, message: '请求体过大' }); return } send(res, 400, { ok: false, message: '请求体不是合法 JSON' }); return }
+      try { send(res, 200, await exportInstalledBatch(ctx, body)) } catch (e) { send(res, 200, { ok: false, message: safeErrorMsg(e) }) }
       return
     }
     if (path === '/api/uninstall' && req.method === 'POST') {

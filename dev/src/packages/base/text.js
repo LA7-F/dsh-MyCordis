@@ -19,3 +19,6 @@ function sq(p) {
 function rand() {
   return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
 }
+// 宿主进程标识：整个 host 半区只求值一次，所以同一进程内恒定、dsh 一重启就换一个。
+// 面板拿它作废「上一次运行留下的输入缓存」（见 ui/page 的安装源），不需要任何服务端状态。
+const HOST_BOOT_ID = rand()

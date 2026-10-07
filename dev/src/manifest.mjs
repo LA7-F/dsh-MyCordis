@@ -19,7 +19,7 @@ export const layers = {
   "base/": "与 DSH 无关的纯工具：文本 / HTTP I/O / 信任栅栏与净化 / 安装源规格。可被任何层依赖，自己不依赖任何层。",
   "runtime/": "DSH 运行时服务接入：工作区与会话解析、shell 与目录助手、CLI/pnpm 定位、原生目录选择。",
   "cordis/": "会话级动态插件领域逻辑：清单、便携定义、打包、导入、收藏与常驻。",
-  "install/": "profile 层真实安装 / 卸载（安装源归一 + 写 $DSH_HOME，风险最高，单独成层）。",
+  "install/": "profile 层真实安装 / 卸载 / 新建（安装源归一 + 写 $DSH_HOME，风险最高，单独成层）。",
   "ui/": "浏览器侧呈现：悬浮入口按钮、面板页面模板。",
   "http/": "对外接口：路由表与统一错误处理，只调用上面各层。",
   "plugin": "入口：inject 声明与装配，必须排在最后（含顶层 return）。"
@@ -37,7 +37,7 @@ export const modules = [
     id: "base/text",
     file: "packages/base/text.js",
     role: "通用文本与标识工具：HTML 转义、跨平台 shell 引用、随机标识",
-    provides: ["esc", "isWindowsHost", "sq", "rand"],
+    provides: ["esc", "isWindowsHost", "sq", "rand", "HOST_BOOT_ID"],
   },
   {
     id: "base/http-io",
@@ -120,8 +120,8 @@ export const modules = [
   {
     id: "install/profile",
     file: "packages/install/profile.js",
-    role: "profile 层真实安装/卸载：dsh plugin add/remove、已装清单",
-    provides: ["PROFILE_BASE_BUNDLES", "SELF_PLUGIN_NAME", "installNoteFor", "installErrorHint", "installBundle", "dshHome", "profileNameOfDir", "activeProfile", "installedPlugins", "uninstallBundle"],
+    role: "profile 层真实安装 / 卸载 / 导出：dsh plugin add/remove、已装清单、导出已装包",
+    provides: ["PROFILE_BASE_BUNDLES", "SELF_PLUGIN_NAME", "installNoteFor", "installErrorHint", "installBundle", "dshHome", "profileNameOfDir", "activeProfile", "installedPlugins", "installedPluginDir", "listProfiles", "targetProfile", "createProfile", "readInstalledText", "installedPortable", "tarballNameOf", "packInstalledTgz", "exportInstalledPlugin", "exportInstalledBatch", "uninstallBundle"],
   },
   {
     id: "ui/button",

@@ -39,6 +39,8 @@
 | --- | --- |
 | **打包整包** | 一次产出 dsh 安装包（`.tgz`）+ 便携包（`.dshplugin.json`），每插件一个子目录；支持单个与批量 |
 | **真实安装 / 卸载** | 面板里选 `.tgz` 或填**安装路径**（未压缩文件夹 / git 仓库 / npm 包名）即走 `dsh plugin add / remove`（profile 级真实安装，重启 DSH 生效） |
+| **profile 不用选** | 面板不再让你挑 profile：安装 / 卸载 / 导出 / 已装清单一律落在**当前部署**那个（桌面版 = `desktop`），后端 `targetProfile` 解析，结果写进运行日志与「管理与卸载」标题行；要换 profile 用命令行 `dsh plugin --profile <名字> …` |
+| **导出已装插件** | 「管理与卸载」页把 profile 里**真实装好**的那一份反方向导出：dsh 安装包（`.tgz`）/ 便携包（`.dshplugin.json`）/ 整包三选一，单个导出或「一键导出全部」；读的是 `$DSH_HOME/profiles/<profile>/node_modules/<name>`，基础层包自动跳过 |
 | **便携包跨会话** | 默认导出 **host + client 两个半区**，导入别的会话或机器后 UI 同样能复现；可勾「仅 host 半区」导出更小的纯 host 定义 |
 | **`.tgz` 也能当便携包** | 选 `.tgz` 导入时只用**系统 tar 解包**取两半区，**不安装**（不写 profile、不用选 profile、不用重启）；重启即消失，要常驻请收藏或真实安装 |
 | **导入即注册** | 导入只注册，点「运行 / 恢复」才启动；收藏（☆）、常驻（★ 重启自动恢复）、同名去重 |
@@ -100,19 +102,22 @@ pnpm dsh --profile web
 
 ### 方式五：在面板里安装（GUI，免命令行）
 
-打开「我的Cordis」面板 → **安装** 页 → ① 的**安装地址栏**（与 `.tgz` 上传共用一个按钮）：
+打开「我的Cordis」面板 → **安装** 页 → ① **安装 dsh 包**：一行三个格子——**安装源框** / 「**选择文件**」/「**安装**」；「选择文件」点开是一个两行小下拉（**文件夹…** / **安装包…**），下面一行是**类型图例**（填进去的内容被识别成哪一类会当场点亮）：
 
 | 安装源 | 地址栏填什么 | 等价命令 |
 | --- | --- | --- |
-| **未压缩文件夹** | 本机绝对/相对路径（如 `E:\harness\dsh-MyCordis`），或点「选择文件夹…」用 DSH 原生目录选择器 | `dsh plugin add <路径>` |
+| **未压缩文件夹** | 本机绝对/相对路径（如 `E:\harness\dsh-MyCordis`），或点「选择文件」→「文件夹…」用 DSH 原生目录选择器 | `dsh plugin add <路径>` |
 | **git 仓库** | `owner/repo`（按 GitHub 展开）、`https://gitee.com/LA7_F/dsh-MyCordis.git`、`git+https://…`、`git@host:owner/repo.git` | `dsh plugin add git+https://…` |
 | **npm 包名** | `dsh-mycordis`、`@scope/name`（版本号也支持，如 `dsh-mycordis@0.1.1`） | `dsh plugin add dsh-mycordis` |
-| **本地文件** | 清空地址栏，点「安装 dsh 包」按按钮选 `.tgz` / `.dshplugin` 上传；也可在地址栏直接填本机 `.tgz` 路径 | `dsh plugin add <本地路径>` |
+| **本地文件** | 点「选择文件」→「安装包…」选 `.tgz` / `.dshplugin` 上传，或把文件**直接拖进 ① 这个框**；也可在安装源里直接填本机 `.tgz` 路径 | `dsh plugin add <本地路径>` |
 | **远程 URL** | `https://…` 的 npm tarball 地址（非 git 托管站点）原样交给 npm | `dsh plugin add https://…/x.tgz` |
 
 - 后端**自动判定**安装源类型：显式前缀（`file:` / `link:` / `git+` / `git@`）→ git 地址 → 在磁盘上真实存在的路径（目录=文件夹安装、文件=安装包）→ 其余按 npm 包名 / 远程 URL 交给 npm。
 - **文件夹安装的硬要求**：其 `package.json` 必须有合法的 npm `name`（小写字母/数字/`-._`）。中文目录名或缺失 `name` 会被 pnpm 判 `INVALID_DEPENDENCY_NAME`——面板会在安装前就拦下并说明原因。
-- 安装写的是 `$DSH_HOME/profiles/<profile>`，重新选 profile 用地址栏右侧的输入框（默认按当前部署回填）；装完**重启 dsh** 生效，装 `desktop` profile 需先完全退出桌面版。
+- 装哪个 profile **不用你选**：面板把 profile 字段整个删了，安装 / 卸载 / 导出 / 已装清单**一律落在当前部署那个 profile**（桌面版 = `desktop`，即 `$DSH_HOME/profiles/desktop`）。后端 `targetProfile` 的规则是：调用方显式给了名字就用它（HTTP API 直接调用时这条路仍在），没给就用 `activeProfile` 那条推断链认出来的当前部署，三个候选全落空才退回 `web`。**装到哪了就写在那**——「安装」的运行日志会写「（profile: desktop）」，「管理与卸载」标题行挂一个 `profile: desktop` 角标。要换 profile 用命令行：`dsh plugin --profile <名字> add …`（面板不再提供入口）。装完**重启 dsh** 生效；当前部署是 `desktop` 时必须先完全退出桌面版。
+- **安装源默认是空的，而且每次重启 dsh 都回到空**：它是一次性动作的目标，把上次填的值一直留在框里只会误导（早期版本还会塞一个「放置目录」当默认值）。同一次 dsh 运行期间关掉再打开面板会记住上次填的；dsh 一重启就作废（前后端用宿主进程标识对账，不靠时间戳猜）。
+- 安装源为空时点「安装」不会弹文件选择器，而是提示两条入口（「选择文件」→「安装包…」，或把文件拖进来）——入口收在一枚按钮的下拉里，弹框反而容易被当成点错。
+- **「选择文件」为什么是下拉**：DSH 的原生选择器（`ctx.directoryPicker`）在 Windows 上是写死 `FOS_PICKFOLDERS` 的**纯文件夹**对话框，系统的一个打开对话框没法同时选文件夹和文件，所以两个入口合并成一枚按钮 + 两行小下拉；点别处 / 按 Esc 自动收起。
 
 ### 方式六：改源码后本地生效（开发者）
 
@@ -153,10 +158,10 @@ node dev/tests/smoke.test.mjs   # 回归门禁
 
 | 页签 | 作用 |
 | --- | --- |
-| **打包** | 设置放置目录（默认 `<工作区>/packer2-out`）→ 选打包类型（`dsh 包` / `便携包` / `整包`）→ 单个打包或「一键打包」批量 |
+| **打包** | 设置**产物放置目录**（默认 `<工作区>/packer2-out`）→ 选**打包类型**（`dsh 包` / `便携包` / `整包`）→ 单个打包或「一键打包」批量；勾选插件用列表**表头**那一格的全选框，或逐行勾 |
 | **安装** | 上传 `.tgz`、或填**安装路径**（未压缩文件夹 / git 仓库 / npm 包名）**真实安装**；导入 `.dshplugin.json` **或 `.tgz`**（仅解包注册，不安装、不自动运行）；选择所属会话 |
 | **临时插件** | 当前会话已注册的插件：运行 / 强制重启、复制跨会话定位信息、导出定义 |
-| **管理与卸载** | 列出指定 profile 已安装的插件并卸载；收藏 / 常驻 / 恢复收藏 / 同名插件去重 |
+| **管理与卸载** | 列出指定 profile 已安装的插件，逐行**导出**（安装包 / 便携包 / 整包）或卸载，也可「一键导出全部」；收藏 / 常驻 / 恢复收藏 / 同名插件去重 |
 
 「打包整包」的产物布局：
 
@@ -168,6 +173,20 @@ node dev/tests/smoke.test.mjs   # 回归门禁
 ```
 
 > 打包产物版本号固定为 `0.1.0`，包名取自会话级插件的名称；产物落在工作区外的路径会触发沙箱提升。
+
+「管理与卸载」页的**导出**是这个方向的反面：把 profile 层已经装好的插件导出成同样的两种产物。
+先填**导出到**目录（缺省 = `<工作区>/packer2-out`）、选**导出格式**，再点行内「导出」或「一键导出全部」：
+
+| 格式 | 产物 | 能用来做什么 |
+| --- | --- | --- |
+| `dsh 安装包（.tgz）` | `<包名>-<版本>.tgz`（附带 SHA-256 与字节数） | 「安装」页真实安装 / `dsh plugin add` |
+| `便携包（host + client）` | `<插件ID>-<包版本>.dshplugin.json` | 「安装 → 导入便携包」，在别的会话里注册为临时插件 |
+| `整包（.tgz + 便携包）` | 一插件一子文件夹，两个产物都出 | 分享 / 换机搬家 |
+
+- 导出的是 `$DSH_HOME/profiles/<profile>/node_modules/<name>` 这一份**装好的实体目录**，与 `dependencies` 里写的是 `file:` / `git` / npm 版本号无关；`.tgz` 由 pnpm 按包内 `files` 白名单打包，不夹带 `node_modules`。
+- 便携包的 `packageId` 取包**版本号**（已装插件没有会话级 `packageId`）；host / client 两个半区**在包根或 `lib/` 下都能找到**——面板「打包」产出的 `.tgz` 把 `host.js` / `client.js` 放包根，本插件自身这类 DSH bundle 包放 `lib/`，两种布局都认。
+- 两处都没有半区（普通 Cordis 组合插件，本来就不是 host/client 布局）时：选「**便携包**」明确报错（产不出一个导不进去的文件）；选「**整包**」仍然交付已经打好的 `.tgz`，缺的那半写进结果的 `portableError` 并由面板按警告显示，不会因为便携半区做不出来就把整条导出判成失败。
+- 基础层包（`@deepseek-ai/dsh-base` 等）由安装目录提供，不在 profile 的 `node_modules` 里，**不可导出也不可卸载**。
 
 ---
 
@@ -189,9 +208,12 @@ node dev/tests/smoke.test.mjs   # 回归门禁
 | `/packer2/api/import` | POST | 导入便携包：`data`（`.dshplugin.json` 对象）或 `tgzPath`（`.tgz` 解包，**不安装**）；注册；`allowWake` 才走会唤醒的通道 |
 | `/packer2/api/run` | POST | 运行 / 重启已注册插件（默认零唤醒；`wake:true` 才唤醒） |
 | `/packer2/api/upload` | POST | 上传 `.tgz` / `.dshplugin` 文件 |
-| `/packer2/api/install` | POST | 真实安装：`source`（未压缩文件夹路径 / git 仓库地址 / npm 包名 / 本地 `.tgz`、`.dshplugin` 路径；`path` 为等价旧字段）+ `sourceKind`（可选：`auto` / `dir` / `git` / `file` / `npm`）+ `profile` |
-| `/packer2/api/uninstall` | POST | 卸载 dsh 插件 |
-| `/packer2/api/installed` | GET | 指定 profile 的已安装插件清单 |
+| `/packer2/api/install` | POST | 真实安装：`source`（未压缩文件夹路径 / git 仓库地址 / npm 包名 / 本地 `.tgz`、`.dshplugin` 路径；`path` 为等价旧字段）+ `sourceKind`（可选：`auto` / `dir` / `git` / `file` / `npm`）+ `profile`（**可空：缺省 = 当前部署**） |
+| `/packer2/api/uninstall` | POST | 卸载 dsh 插件：`name`（`profile` 可空 = 当前部署） |
+| `/packer2/api/installed` | GET | 已安装插件清单（`profile` 可空 = 当前部署；响应里回传解析后的 `profile`） |
+| `/packer2/api/export-installed` | POST | **导出已装插件**：`profile`（可空 = 当前部署）+ `format`（`tgz` / `portable` / `whole`）+ `outDir`（可空，缺省工作区 `packer2-out`）+ `plugins`（`[{ name }]`，可多个）；逐项收成 `results`，单个失败不影响其余 |
+| `/packer2/api/profiles` | GET | 列出 `$DSH_HOME/profiles` 下已有的 profile 与当前部署（面板已不用，供脚本 / curl） |
+| `/packer2/api/profile-create` | POST | 新建 profile：`name`（走 `dsh plugin --profile <新名> list` 触发 dsh 自己的首次初始化；面板已不用，供脚本 / curl） |
 | `/packer2/api/favorites` | GET | 收藏列表 |
 | `/packer2/api/favorite` | POST | 收藏 / 取消收藏 / 设为常驻 |
 | `/packer2/api/restore-one` | POST | 恢复单个插件（注册并启动） |
@@ -311,7 +333,7 @@ mycordis-v3/
 node dev/tools/check.mjs          # 只读门禁：静态结构 + 分层方向 + 求值 + inject（并行改动时用这个）
 node dev/tools/build.mjs          # 由 src/packages/** 生成 lib/host.js
 node dev/tools/build.mjs --check  # 只校验 src 与 lib/host.js 是否同步，不写盘（CI 友好）
-node dev/tests/smoke.test.mjs     # 回归门禁（当前基线：passed=55 failed=0）
+node dev/tests/smoke.test.mjs     # 回归门禁（当前基线：passed=189 failed=0）
 ```
 
 ### 提交前检查
@@ -319,7 +341,7 @@ node dev/tests/smoke.test.mjs     # 回归门禁（当前基线：passed=55 fail
 1. `node dev/tools/check.mjs` → `CHECK OK`；
 2. `node dev/tools/build.mjs --check` → `src 与 lib/host.js 同步`
    （`lib/host.js` 是产物，但它随包分发，必须与源码一起提交）；
-3. `node dev/tests/smoke.test.mjs` → `RESULT OK passed=55 failed=0`。
+3. `node dev/tests/smoke.test.mjs` → `RESULT OK passed=189 failed=0`。
 
 ### 并行纪律
 
@@ -358,6 +380,7 @@ node dev/tests/smoke.test.mjs     # 回归门禁（当前基线：passed=55 fail
 | B8 | 低 | `/api/browse/pick` 重复调用 `svc.capability()`、未使用变量 | 缓存能力探测结果，清理未用变量 |
 | B9 | **阻断** | 工作区根目录解析错：只读部署兜底 `sandboxPolicy.workspaceRoot`，产物 / 收藏落到 profile 目录 | 按官方规范 `agent.session.header.cwd ?? sandboxPolicy.workspaceRoot` 重建解析链，并给收藏加旧位置回读兜底 |
 | B10 | **阻断** | 写入的沙箱策略仍走部署兜底根：全局 HTTP 路由下 `ctx.sandboxPolicy.resolve()` 的根是 profile 目录（不是会话工作区），于是工作区内的写入被判越界——`fs` 报 `file access denied under workspace-write mode`，`pwsh` 的 `New-Item` 报「对路径".packer2"的访问被拒绝」（导入 `.tgz`、上传、导出、打包、收藏都会中） | 新增 `workspaceWritePolicy(ws)`（`runtime/workspace`）：**工作区内的每一次 fs / shell 写入都显式带 `{ mode:'workspace-write', workspaceRoot:<本工作区> }`**，工作区外仍显式 `danger-full-access`；不再依赖部署兜底根 |
+| B11 | 功能失效 | 「导出已装插件」的便携包 / 整包：host / client 半区**只认包根**，于是 `lib/` 布局的包（本插件自身就是 `lib/host.js` + `lib/client.js`）被误判成「不是 host/client 半区布局」而拒绝导出；整包在便携半区失败时连**已经打好的 `.tgz`** 也一起判成失败，用户看到的是「什么都没导出」 | `installedPortable` 包根与 `lib/` 两处都找（先包根）；整包把缺的那一半记进结果的 `portableError`（面板按警告显示）并照常交付 `.tgz`，只有「只要便携包」这一种格式才真的失败 |
 
 同批次还落地了：便携包默认导出完整定义（host + client）、便携包写盘不再依赖 PowerShell、
 打包 / 清理目录与哈希计算跨平台化、临时插件运行默认零唤醒（`settleUserRun → agent.inject`）、

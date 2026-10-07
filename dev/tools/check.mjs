@@ -32,7 +32,7 @@ if (plugin !== null) {
 }
 
 // 跨片段引用最容易漏：逐层抽查每个片段对外承诺的名字都真的在产物里
-for (const name of ['esc', 'sq', 'send', 'parseOrigin', 'isTrustedRequest', 'normPath', 'sanitizeFilename', 'safeErrorMsg', 'workspaceRoot', 'workspaceWritePolicy', 'runShell', 'ensureDir', 'resolveDshCli', 'resolvePnpm', 'handleRequest', 'buttonScript', 'pageHtml', 'pluginCurrentName', 'readPluginFromTgz', 'packWhole', 'importDynamicPlugin', 'installBundle']) {
+for (const name of ['esc', 'sq', 'send', 'parseOrigin', 'isTrustedRequest', 'normPath', 'sanitizeFilename', 'safeErrorMsg', 'workspaceRoot', 'workspaceWritePolicy', 'runShell', 'ensureDir', 'resolveDshCli', 'resolvePnpm', 'handleRequest', 'buttonScript', 'pageHtml', 'pluginCurrentName', 'readPluginFromTgz', 'packWhole', 'importDynamicPlugin', 'installBundle', 'installedPluginDir', 'exportInstalledPlugin']) {
   ok(new RegExp('function ' + name + '\\s*\\(').test(code), 'function ' + name + ' 存在')
 }
 
